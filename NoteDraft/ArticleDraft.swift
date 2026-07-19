@@ -15,6 +15,7 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
         articleType: String,
         questions: [String],
         answers: [String: String] = [:],
+        tags: [String] = [],
         updatedAt: Date = Date()
     ) {
         self.id = id
@@ -22,6 +23,7 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
         self.articleType = articleType
         self.questions = questions
         self.answers = answers
+        self.tags = tags
         self.updatedAt = updatedAt
     }
     
@@ -31,6 +33,7 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
         case articleType
         case questions
         case answers
+        case tags
         case updatedAt
     }
     
@@ -59,6 +62,11 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
             forKey: .answers
         ) ?? [:]
         
+        let decodedTags = try container.decodeIfPresent(
+            [String].self,
+            forKey: .tags
+        ) ?? []
+        
         let decodedUpdatedAt = try container.decodeIfPresent(
             Date.self,
             forKey: .updatedAt
@@ -84,6 +92,7 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
         articleType = decodedArticleType
         questions = decodedQuestions
         answers = decodedAnswers
+        tags = decodedTags
         updatedAt = decodedUpdatedAt
     }
 }
