@@ -86,10 +86,11 @@
 				};
 			};
 			buildConfigurationList = 79A78564300C8CA700B667D6 /* Build configuration list for PBXProject "NoteDraft" */;
-			developmentRegion = en;
+			developmentRegion = ja;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
+				ja,
 				Base,
 			);
 			mainGroup = 79A78560300C8CA700B667D6;
