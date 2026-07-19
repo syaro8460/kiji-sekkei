@@ -19,9 +19,196 @@ struct ContentView: View {
             return sortedDrafts
         }
 
-        return sortedDrafts.filter {
-            $0.title.localizedCaseInsensitiveContains(searchText)
+        return sortedDrafts.filter { draft in
+            var targets: [String] = []
+
+            targets.append(draft.title)
+            targets.append(draft.articleType)
+            targets.append(contentsOf: draft.questions)
+            targets.append(contentsOf: draft.answers.values)
+
+            return targets.contains { target in
+                isFuzzyMatch(
+                    searchText,
+                    target: target
+                )
+            }
         }
+    }
+    
+    private func isFuzzyMatch(
+        _ query: String,
+        target: String
+    ) -> Bool {
+        let normalizedQuery = normalize(query)
+        let normalizedTarget = normalize(target)
+
+        guard !normalizedQuery.isEmpty else {
+            return true
+        }
+
+        let keywords = normalizedQuery.split {
+            $0.isWhitespace
+        }.map(String.init)
+
+        return keywords.allSatisfy { keyword in
+            // 通常の部分一致
+            if normalizedTarget.contains(keyword) {
+                return true
+            }
+
+            let allowedDistance = max(
+                1,
+                keyword.count / 3
+            )
+
+            return containsFuzzySubstring(
+                keyword,
+                in: normalizedTarget,
+                allowedDistance: allowedDistance
+            )
+        }
+    }
+
+    private func containsFuzzySubstring(
+        _ keyword: String,
+        in target: String,
+        allowedDistance: Int
+    ) -> Bool {
+        let keywordCharacters = Array(keyword)
+        let targetCharacters = Array(target)
+
+        guard !keywordCharacters.isEmpty else {
+            return true
+        }
+
+        guard !targetCharacters.isEmpty else {
+            return false
+        }
+
+        let keywordLength = keywordCharacters.count
+
+        let minimumWindowLength = max(
+            1,
+            keywordLength - allowedDistance
+        )
+
+        let maximumWindowLength = min(
+            targetCharacters.count,
+            keywordLength + allowedDistance
+        )
+
+        guard minimumWindowLength <= maximumWindowLength else {
+            return false
+        }
+
+        for windowLength in minimumWindowLength...maximumWindowLength {
+            guard targetCharacters.count >= windowLength else {
+                continue
+            }
+
+            let lastStartIndex =
+                targetCharacters.count - windowLength
+
+            for startIndex in 0...lastStartIndex {
+                let endIndex = startIndex + windowLength
+
+                let candidate = String(
+                    targetCharacters[startIndex..<endIndex]
+                )
+
+                if levenshteinDistance(
+                    keyword,
+                    candidate
+                ) <= allowedDistance {
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    private func normalize(
+        _ text: String
+    ) -> String {
+        let foldedText = text.folding(
+            options: [
+                .caseInsensitive,
+                .diacriticInsensitive,
+                .widthInsensitive
+            ],
+            locale: .current
+        )
+
+        return foldedText.applyingTransform(
+            .hiraganaToKatakana,
+            reverse: false
+        ) ?? foldedText
+    }
+    
+    private func levenshteinDistance(
+        _ lhs: String,
+        _ rhs: String
+    ) -> Int {
+        let lhsCharacters = Array(lhs)
+        let rhsCharacters = Array(rhs)
+
+        if lhsCharacters.isEmpty {
+            return rhsCharacters.count
+        }
+
+        if rhsCharacters.isEmpty {
+            return lhsCharacters.count
+        }
+
+        var previousRow = Array(
+            0...rhsCharacters.count
+        )
+
+        for (
+            lhsIndex,
+            lhsCharacter
+        ) in lhsCharacters.enumerated() {
+            var currentRow = [
+                lhsIndex + 1
+            ]
+
+            for (
+                rhsIndex,
+                rhsCharacter
+            ) in rhsCharacters.enumerated() {
+                let insertion = currentRow[
+                    rhsIndex
+                ] + 1
+
+                let deletion = previousRow[
+                    rhsIndex + 1
+                ] + 1
+
+                let substitution = previousRow[
+                    rhsIndex
+                ] + (
+                    lhsCharacter == rhsCharacter
+                    ? 0
+                    : 1
+                )
+
+                currentRow.append(
+                    min(
+                        insertion,
+                        deletion,
+                        substitution
+                    )
+                )
+            }
+
+            previousRow = currentRow
+        }
+
+        return previousRow[
+            rhsCharacters.count
+        ]
     }
     
     var body: some View {
