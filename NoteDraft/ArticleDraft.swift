@@ -6,6 +6,7 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
     var articleType: String
     var questions: [String]
     var answers: [String: String]
+    var tags: [String] = []
     var updatedAt: Date
     
     init(

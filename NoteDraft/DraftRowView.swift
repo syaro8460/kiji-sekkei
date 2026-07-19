@@ -13,6 +13,21 @@ struct DraftRowView: View {
                 Text(draft.title)
                     .font(.headline)
                     .lineLimit(2)
+                
+                if !draft.tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 6) {
+                            ForEach(draft.tags, id: \.self) { tag in
+                                Text(tag)
+                                    .font(.caption2)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(.blue.opacity(0.15))
+                                    .clipShape(Capsule())
+                            }
+                        }
+                    }
+                }
 
                 HStack(spacing: 6) {
                     Image(systemName: iconName)

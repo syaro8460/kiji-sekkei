@@ -26,6 +26,7 @@ struct ContentView: View {
             targets.append(draft.articleType)
             targets.append(contentsOf: draft.questions)
             targets.append(contentsOf: draft.answers.values)
+            targets.append(contentsOf: draft.tags)
 
             return targets.contains { target in
                 isFuzzyMatch(
