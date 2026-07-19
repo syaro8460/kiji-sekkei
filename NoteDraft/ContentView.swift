@@ -8,6 +8,21 @@ struct ContentView: View {
     @State private var showingNewDraft = false
     @State private var newlyCreatedDraftID: UUID?
     @State private var pendingDeleteDraftID: UUID?
+    @State private var searchText = ""
+    
+    private var filteredDrafts: [ArticleDraft] {
+        let sortedDrafts = store.drafts.sorted {
+            $0.updatedAt > $1.updatedAt
+        }
+
+        guard !searchText.isEmpty else {
+            return sortedDrafts
+        }
+
+        return sortedDrafts.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
@@ -19,6 +34,10 @@ struct ContentView: View {
                 }
             }
             .navigationTitle("記事設計")
+            .searchable(
+                text: $searchText,
+                prompt: "検索"
+            )
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     NavigationLink {
@@ -99,39 +118,47 @@ struct ContentView: View {
     }
     
     private var draftList: some View {
-        List {
-            ForEach(
-                store.sortedDraftIDs,
-                id: \.self
-            ) { draftID in
-                if let draft = draftForID(draftID) {
-                    NavigationLink(value: draftID) {
-                        DraftRowView(draft: draft)
-                    }
-                    .swipeActions(
-                        edge: .trailing,
-                        allowsFullSwipe: false
-                    ) {
-                        Button(
-                            "削除",
-                            role: .destructive
+        Group {
+            if filteredDrafts.isEmpty {
+                ContentUnavailableView {
+                    Label(
+                        "検索結果がありません",
+                        systemImage: "magnifyingglass"
+                    )
+                } description: {
+                    Text("別のキーワードで検索してみてください。")
+                }
+            } else {
+                List {
+                    ForEach(filteredDrafts) { draft in
+                        NavigationLink(value: draft.id) {
+                            DraftRowView(draft: draft)
+                        }
+                        .swipeActions(
+                            edge: .trailing,
+                            allowsFullSwipe: false
                         ) {
-                            pendingDeleteDraftID = draftID
+                            Button(
+                                "削除",
+                                role: .destructive
+                            ) {
+                                pendingDeleteDraftID = draft.id
+                            }
                         }
-                    }
-                    .swipeActions(
-                        edge: .leading,
-                        allowsFullSwipe: true
-                    ) {
-                        Button {
-                            duplicateAndOpen(draftID)
-                        } label: {
-                            Label(
-                                "複製",
-                                systemImage: "doc.on.doc"
-                            )
+                        .swipeActions(
+                            edge: .leading,
+                            allowsFullSwipe: true
+                        ) {
+                            Button {
+                                duplicateAndOpen(draft.id)
+                            } label: {
+                                Label(
+                                    "複製",
+                                    systemImage: "doc.on.doc"
+                                )
+                            }
+                            .tint(.blue)
                         }
-                        .tint(.blue)
                     }
                 }
             }
