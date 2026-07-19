@@ -19,6 +19,10 @@ struct ArticleEditorView: View {
                     "テンプレート",
                     value: draft.articleType
                 )
+                TextField(
+                    "タグ（カンマ区切り）",
+                    text: tagsBinding
+                )
             }
 
             ForEach(questions, id: \.self) { question in
@@ -53,6 +57,27 @@ struct ArticleEditorView: View {
             },
             set: { newValue in
                 draft.title = newValue
+                updateDate()
+            }
+        )
+    }
+
+    private var tagsBinding: Binding<String> {
+        Binding(
+            get: {
+                draft.tags.joined(separator: ", ")
+            },
+            set: { newValue in
+                draft.tags = newValue
+                    .replacingOccurrences(of: "、", with: ",")
+                    .split(separator: ",")
+                    .map {
+                        $0.trimmingCharacters(in: .whitespaces)
+                    }
+                    .filter {
+                        !$0.isEmpty
+                    }
+
                 updateDate()
             }
         )
