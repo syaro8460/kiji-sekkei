@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DraftRowView: View {
     let draft: ArticleDraft
+    var onTagTap: ((String) -> Void)?
 
     var body: some View {
         HStack(spacing: 14) {
@@ -18,12 +19,12 @@ struct DraftRowView: View {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 6) {
                             ForEach(draft.tags, id: \.self) { tag in
-                                Text(tag)
-                                    .font(.caption2)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(.blue.opacity(0.15))
-                                    .clipShape(Capsule())
+                                TagChipView(
+                                    tag: tag,
+                                    onTap: {
+                                        onTagTap?(tag)
+                                    }
+                                )
                             }
                         }
                     }

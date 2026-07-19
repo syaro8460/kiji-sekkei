@@ -2,6 +2,9 @@ import SwiftUI
 
 struct ArticleEditorView: View {
     @Binding var draft: ArticleDraft
+    
+    @State private var newTag = ""
+    @FocusState private var isTagFieldFocused: Bool
 
     private var questions: [String] {
         draft.questions
@@ -19,18 +22,50 @@ struct ArticleEditorView: View {
                     "テンプレート",
                     value: draft.articleType
                 )
-                TextField(
-                    "タグ（カンマ区切り）",
-                    text: tagsBinding
-                )
-            }
 
-            ForEach(questions, id: \.self) { question in
-                Section(question) {
-                    TextEditor(
-                        text: answerBinding(for: question)
+                if !draft.tags.isEmpty {
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(draft.tags, id: \.self) { tag in
+                                TagChipView(
+                                    tag: tag,
+                                    onDelete: {
+                                        draft.tags.removeAll { $0 == tag }
+                                        updateDate()
+
+                                        DispatchQueue.main.async {
+                                            isTagFieldFocused = false
+                                        }
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+
+                TextField(
+                    "タグを入力",
+                    text: $newTag
+                )
+                .focused($isTagFieldFocused)
+                .onSubmit {
+                    let tag = newTag.trimmingCharacters(
+                        in: .whitespacesAndNewlines
                     )
-                    .frame(minHeight: 110)
+
+                    guard !tag.isEmpty else {
+                        return
+                    }
+
+                    guard !draft.tags.contains(tag) else {
+                        newTag = ""
+                        return
+                    }
+
+                    draft.tags.append(tag)
+                    newTag = ""
+                    updateDate()
+                    isTagFieldFocused = true
                 }
             }
 
@@ -45,6 +80,9 @@ struct ArticleEditorView: View {
                     .frame(maxWidth: .infinity)
                 }
             }
+        }
+        .onAppear {
+            isTagFieldFocused = false
         }
         .navigationTitle("記事の内容")
         .navigationBarTitleDisplayMode(.inline)

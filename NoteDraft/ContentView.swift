@@ -9,6 +9,7 @@ struct ContentView: View {
     @State private var newlyCreatedDraftID: UUID?
     @State private var pendingDeleteDraftID: UUID?
     @State private var searchText = ""
+    @State private var isSearchPresented = false
     
     private var filteredDrafts: [ArticleDraft] {
         let sortedDrafts = store.drafts.sorted {
@@ -224,6 +225,7 @@ struct ContentView: View {
             .navigationTitle("記事設計")
             .searchable(
                 text: $searchText,
+                isPresented: $isSearchPresented,
                 prompt: "検索"
             )
             .toolbar {
@@ -320,7 +322,18 @@ struct ContentView: View {
                 List {
                     ForEach(filteredDrafts) { draft in
                         NavigationLink(value: draft.id) {
-                            DraftRowView(draft: draft)
+                            DraftRowView(
+                                draft: draft,
+                                onTagTap: { tag in
+                                    // FIXME:
+                                    // タグタップで searchText を更新した場合、
+                                    // .searchable のクリアボタン押下時にキーボードが表示される。
+                                    // dismissSearch() / isPresented では改善せず。
+                                    // SwiftUI の挙動と思われるため現状は保留。)
+                                    searchText = tag
+                                    isSearchPresented = false
+                                }
+                            )
                         }
                         .swipeActions(
                             edge: .trailing,
