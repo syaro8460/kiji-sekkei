@@ -376,7 +376,8 @@ struct ContentView: View {
             where: { $0.id == draftID }
         ) {
             ArticleEditorView(
-                draft: $store.drafts[index]
+                draft: $store.drafts[index],
+                templateStore: templateStore
             )
         } else {
             ContentUnavailableView(
