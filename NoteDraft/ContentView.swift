@@ -267,26 +267,6 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("テンプレートを管理")
                 }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    Menu {
-                        Picker(
-                            "並び替え",
-                            selection: $sortOrder
-                        ) {
-                            ForEach(
-                                DraftSortOrder.allCases,
-                                id: \.self
-                            ) { order in
-                                Text(order.title)
-                                    .tag(order)
-                            }
-                        }
-                    } label: {
-                        Image(systemName: "arrow.up.arrow.down")
-                    }
-                    .accessibilityLabel("記事を並び替え")
-                }
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -295,6 +275,15 @@ struct ContentView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("新しい記事を作成")
+                }
+                
+                ToolbarItem(placement: .topBarTrailing) {
+                    NavigationLink {
+                        SettingsView()
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                    .accessibilityLabel("設定")
                 }
             }
             .navigationDestination(for: UUID.self) { draftID in
