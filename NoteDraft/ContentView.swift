@@ -10,10 +10,34 @@ struct ContentView: View {
     @State private var pendingDeleteDraftID: UUID?
     @State private var searchText = ""
     @State private var isSearchPresented = false
+    @AppStorage("draftSortOrder")
+    private var sortOrder: DraftSortOrder = .updatedNewest
     
     private var filteredDrafts: [ArticleDraft] {
-        let sortedDrafts = store.drafts.sorted {
-            $0.updatedAt > $1.updatedAt
+        let sortedDrafts: [ArticleDraft]
+        
+        switch sortOrder {
+        case .updatedNewest:
+            sortedDrafts = store.drafts.sorted {
+                $0.updatedAt > $1.updatedAt
+            }
+
+        case .updatedOldest:
+            sortedDrafts = store.drafts.sorted {
+                $0.updatedAt < $1.updatedAt
+            }
+
+        case .titleAscending:
+            sortedDrafts = store.drafts.sorted {
+                $0.title.localizedCompare($1.title)
+                    == .orderedAscending
+            }
+
+        case .titleDescending:
+            sortedDrafts = store.drafts.sorted {
+                $0.title.localizedCompare($1.title)
+                    == .orderedDescending
+            }
         }
 
         guard !searchText.isEmpty else {
@@ -243,6 +267,26 @@ struct ContentView: View {
                     }
                     .accessibilityLabel("テンプレートを管理")
                 }
+                
+                ToolbarItem(placement: .topBarTrailing) {
+                    Menu {
+                        Picker(
+                            "並び替え",
+                            selection: $sortOrder
+                        ) {
+                            ForEach(
+                                DraftSortOrder.allCases,
+                                id: \.self
+                            ) { order in
+                                Text(order.title)
+                                    .tag(order)
+                            }
+                        }
+                    } label: {
+                        Image(systemName: "arrow.up.arrow.down")
+                    }
+                    .accessibilityLabel("記事を並び替え")
+                }
 
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
@@ -322,46 +366,55 @@ struct ContentView: View {
                 }
             } else {
                 List {
-                    ForEach(filteredDrafts) { draft in
-                        NavigationLink(value: draft.id) {
-                            DraftRowView(
-                                draft: draft,
-                                onTagTap: { tag in
-                                    // FIXME:
-                                    // タグタップで searchText を更新した場合、
-                                    // .searchable のクリアボタン押下時にキーボードが表示される。
-                                    // dismissSearch() / isPresented では改善せず。
-                                    // SwiftUI の挙動と思われるため現状は保留。)
-                                    searchText = tag
-                                    isSearchPresented = false
-                                }
-                            )
-                        }
-                        .swipeActions(
-                            edge: .trailing,
-                            allowsFullSwipe: false
-                        ) {
-                            Button(
-                                "削除",
-                                role: .destructive
-                            ) {
-                                pendingDeleteDraftID = draft.id
-                            }
-                        }
-                        .swipeActions(
-                            edge: .leading,
-                            allowsFullSwipe: true
-                        ) {
-                            Button {
-                                duplicateAndOpen(draft.id)
-                            } label: {
-                                Label(
-                                    "複製",
-                                    systemImage: "doc.on.doc"
+                    Section {
+                        ForEach(filteredDrafts) { draft in
+                            NavigationLink(value: draft.id) {
+                                DraftRowView(
+                                    draft: draft,
+                                    onTagTap: { tag in
+                                        // FIXME:
+                                        // タグタップで searchText を更新した場合、
+                                        // .searchable のクリアボタン押下時に
+                                        // キーボードが表示される。
+                                        // dismissSearch() / isPresented では改善せず。
+                                        // SwiftUI の挙動と思われるため現状は保留。
+                                        searchText = tag
+                                        isSearchPresented = false
+                                    }
                                 )
                             }
-                            .tint(.blue)
+                            .swipeActions(
+                                edge: .trailing,
+                                allowsFullSwipe: false
+                            ) {
+                                Button(
+                                    "削除",
+                                    role: .destructive
+                                ) {
+                                    pendingDeleteDraftID = draft.id
+                                }
+                            }
+                            .swipeActions(
+                                edge: .leading,
+                                allowsFullSwipe: true
+                            ) {
+                                Button {
+                                    duplicateAndOpen(draft.id)
+                                } label: {
+                                    Label(
+                                        "複製",
+                                        systemImage: "doc.on.doc"
+                                    )
+                                }
+                                .tint(.blue)
+                            }
                         }
+                    } header: {
+                        Text(
+                            searchText.isEmpty
+                            ? "記事数：\(filteredDrafts.count)件"
+                            : "検索結果：\(filteredDrafts.count)件"
+                        )
                     }
                 }
             }
@@ -384,14 +437,6 @@ struct ContentView: View {
                 "記事が見つかりません",
                 systemImage: "exclamationmark.triangle"
             )
-        }
-    }
-    
-    private func draftForID(
-        _ draftID: UUID
-    ) -> ArticleDraft? {
-        store.drafts.first { draft in
-            draft.id == draftID
         }
     }
     
