@@ -235,9 +235,11 @@ struct ContentView: View {
                             templateStore: templateStore
                         )
                     } label: {
-                        Image(
-                            systemName: "square.grid.2x2"
-                        )
+                        HStack(spacing: 5) {
+                            Image(systemName: "square.grid.2x2")
+
+                            Text("テンプレート")
+                        }
                     }
                     .accessibilityLabel("テンプレートを管理")
                 }
