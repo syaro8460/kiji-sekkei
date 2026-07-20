@@ -5,6 +5,8 @@ struct TemplateListView: View {
 
     @State private var showingNewTemplate = false
     @State private var pendingDeleteTemplateID: UUID?
+    @State private var editingTemplate: ArticleTemplate?
+    @State private var showingReorder = false
 
     var body: some View {
         List {
@@ -29,8 +31,18 @@ struct TemplateListView: View {
                     ForEach(
                         templateStore.customTemplates
                     ) { template in
-                        templateRow(template)
-                            .swipeActions(
+                        Button {
+                            editingTemplate = template
+                        } label: {
+                            templateRow(template)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(
                                 edge: .trailing,
                                 allowsFullSwipe: false
                             ) {
@@ -42,12 +54,36 @@ struct TemplateListView: View {
                                         template.id
                                 }
                             }
+                        .swipeActions(
+                                edge: .leading,
+                                allowsFullSwipe: true
+                            ) {
+                                Button {
+                                    templateStore.duplicate(
+                                        id: template.id
+                                    )
+                                } label: {
+                                    Label(
+                                        "複製",
+                                        systemImage: "doc.on.doc"
+                                    )
+                                }
+                                .tint(.blue)
+                            }
                     }
                 }
             }
         }
         .navigationTitle("テンプレート")
         .toolbar {
+            ToolbarItem(
+                placement: .topBarLeading
+            ) {
+                Button("並び替え") {
+                    showingReorder = true
+                }
+            }
+
             ToolbarItem(
                 placement: .topBarTrailing
             ) {
@@ -58,11 +94,21 @@ struct TemplateListView: View {
                 }
             }
         }
-        .sheet(
-            isPresented: $showingNewTemplate
-        ) {
+        .sheet(isPresented: $showingNewTemplate) {
             NewTemplateView(
+                templateStore: templateStore,
+                editingTemplate: nil
+            )
+        }
+        .sheet(isPresented: $showingReorder) {
+            TemplateReorderView(
                 templateStore: templateStore
+            )
+        }
+        .sheet(item: $editingTemplate) { template in
+            NewTemplateView(
+                templateStore: templateStore,
+                editingTemplate: template
             )
         }
         .alert(

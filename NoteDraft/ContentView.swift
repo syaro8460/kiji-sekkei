@@ -222,7 +222,7 @@ struct ContentView: View {
                     draftList
                 }
             }
-            .navigationTitle("記事設計")
+            .navigationTitle("記事一覧")
             .searchable(
                 text: $searchText,
                 isPresented: $isSearchPresented,
@@ -235,9 +235,11 @@ struct ContentView: View {
                             templateStore: templateStore
                         )
                     } label: {
-                        Image(
-                            systemName: "square.grid.2x2"
-                        )
+                        HStack(spacing: 5) {
+                            Image(systemName: "square.grid.2x2")
+
+                            Text("テンプレート")
+                        }
                     }
                     .accessibilityLabel("テンプレートを管理")
                 }
@@ -374,7 +376,8 @@ struct ContentView: View {
             where: { $0.id == draftID }
         ) {
             ArticleEditorView(
-                draft: $store.drafts[index]
+                draft: $store.drafts[index],
+                templateStore: templateStore
             )
         } else {
             ContentUnavailableView(

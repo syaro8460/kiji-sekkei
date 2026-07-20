@@ -2,8 +2,10 @@ import SwiftUI
 
 struct ArticleEditorView: View {
     @Binding var draft: ArticleDraft
+    let templateStore: TemplateStore
     
     @State private var newTag = ""
+    
     @FocusState private var isTagFieldFocused: Bool
 
     private var questions: [String] {
@@ -18,11 +20,43 @@ struct ArticleEditorView: View {
                     text: titleBinding
                 )
 
-                LabeledContent(
-                    "テンプレート",
-                    value: draft.articleType
-                )
+                NavigationLink {
+                    TemplateSelectionView(
+                        onSelect: { template, mode in
+                            let newQuestions = templateStore.allTemplates
+                                .first { $0.name == template }?
+                                .questions ?? []
 
+                            switch mode {
+                            case .reset:
+                                draft.articleType = template
+                                draft.questions = newQuestions
+                                draft.answers = [:]
+
+                            case .keepCommonAnswers:
+                                var newAnswers: [String: String] = [:]
+
+                                for question in newQuestions {
+                                    if let answer = draft.answers[question] {
+                                        newAnswers[question] = answer
+                                    }
+                                }
+
+                                draft.articleType = template
+                                draft.questions = newQuestions
+                                draft.answers = newAnswers
+                            }
+
+                            updateDate()
+                        },
+                        templateStore: templateStore
+                    )
+                } label: {
+                    LabeledContent(
+                        "テンプレート",
+                        value: draft.articleType
+                    )
+                }
                 if !draft.tags.isEmpty {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 8) {
@@ -66,6 +100,23 @@ struct ArticleEditorView: View {
                     newTag = ""
                     updateDate()
                     isTagFieldFocused = true
+                }
+            }
+
+            Section("質問と回答") {
+                ForEach(questions, id: \.self) { question in
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text(question)
+                            .font(.headline)
+
+                        TextField(
+                            "回答を入力",
+                            text: answerBinding(for: question),
+                            axis: .vertical
+                        )
+                        .lineLimit(3...8)
+                    }
+                    .padding(.vertical, 4)
                 }
             }
 
