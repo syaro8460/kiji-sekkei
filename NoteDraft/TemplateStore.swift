@@ -65,6 +65,23 @@ final class TemplateStore: ObservableObject {
         }
     }
 
+    func duplicate(id: UUID) {
+        guard let template = customTemplates.first(
+            where: { $0.id == id }
+        ) else {
+            return
+        }
+
+        let duplicatedTemplate = ArticleTemplate(
+            name: "\(template.name) コピー",
+            questions: template.questions,
+            iconName: template.iconName,
+            isBuiltIn: false
+        )
+
+        customTemplates.append(duplicatedTemplate)
+    }
+    
     func update(
         id: UUID,
         name: String,

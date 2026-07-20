@@ -100,7 +100,11 @@ struct NewTemplateView: View {
                 ToolbarItem(
                     placement: .confirmationAction
                 ) {
-                    Button("保存") {
+                    Button(
+                        editingTemplate == nil
+                        ? "保存"
+                        : "更新"
+                    ) {
                         saveTemplate()
                     }
                     .disabled(!canSave)

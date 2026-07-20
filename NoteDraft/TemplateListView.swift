@@ -30,21 +30,21 @@ struct TemplateListView: View {
                     ForEach(
                         templateStore.customTemplates
                     ) { template in
-                        templateRow(template)
-                            .swipeActions(
+                        Button {
+                            editingTemplate = template
+                        } label: {
+                            templateRow(template)
+                                .frame(
+                                    maxWidth: .infinity,
+                                    alignment: .leading
+                                )
+                                .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .swipeActions(
                                 edge: .trailing,
                                 allowsFullSwipe: false
                             ) {
-                                Button {
-                                    editingTemplate = template
-                                } label: {
-                                    Label(
-                                        "編集",
-                                        systemImage: "pencil"
-                                    )
-                                }
-                                .tint(.blue)
-
                                 Button(
                                     "削除",
                                     role: .destructive
@@ -52,6 +52,22 @@ struct TemplateListView: View {
                                     pendingDeleteTemplateID =
                                         template.id
                                 }
+                            }
+                        .swipeActions(
+                                edge: .leading,
+                                allowsFullSwipe: true
+                            ) {
+                                Button {
+                                    templateStore.duplicate(
+                                        id: template.id
+                                    )
+                                } label: {
+                                    Label(
+                                        "複製",
+                                        systemImage: "doc.on.doc"
+                                    )
+                                }
+                                .tint(.blue)
                             }
                     }
                 }
