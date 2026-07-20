@@ -6,6 +6,7 @@ struct TemplateListView: View {
     @State private var showingNewTemplate = false
     @State private var pendingDeleteTemplateID: UUID?
     @State private var editingTemplate: ArticleTemplate?
+    @State private var showingReorder = false
 
     var body: some View {
         List {
@@ -76,6 +77,14 @@ struct TemplateListView: View {
         .navigationTitle("テンプレート")
         .toolbar {
             ToolbarItem(
+                placement: .topBarLeading
+            ) {
+                Button("並び替え") {
+                    showingReorder = true
+                }
+            }
+
+            ToolbarItem(
                 placement: .topBarTrailing
             ) {
                 Button {
@@ -85,12 +94,15 @@ struct TemplateListView: View {
                 }
             }
         }
-        .sheet(
-            isPresented: $showingNewTemplate
-        ) {
+        .sheet(isPresented: $showingNewTemplate) {
             NewTemplateView(
                 templateStore: templateStore,
                 editingTemplate: nil
+            )
+        }
+        .sheet(isPresented: $showingReorder) {
+            TemplateReorderView(
+                templateStore: templateStore
             )
         }
         .sheet(item: $editingTemplate) { template in

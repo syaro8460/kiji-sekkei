@@ -8,7 +8,10 @@ struct NewTemplateView: View {
     let editingTemplate: ArticleTemplate?
 
     @State private var templateName = ""
-    @State private var questions = [""]
+    @State private var questions = [
+        QuestionItem(text: "")
+    ]
+    @State private var showingQuestionReorder = false
 
     private var canSave: Bool {
         let hasName = !templateName
@@ -18,7 +21,7 @@ struct NewTemplateView: View {
             .isEmpty
 
         let hasQuestion = questions.contains { question in
-            !question
+            !question.text
                 .trimmingCharacters(
                     in: .whitespacesAndNewlines
                 )
@@ -46,15 +49,13 @@ struct NewTemplateView: View {
                         HStack {
                             TextField(
                                 "質問項目",
-                                text: $questions[index],
+                                text: $questions[index].text,
                                 axis: .vertical
                             )
 
                             if questions.count > 1 {
                                 Button {
-                                    questions.remove(
-                                        at: index
-                                    )
+                                    questions.remove(at: index)
                                 } label: {
                                     Image(
                                         systemName: "minus.circle.fill"
@@ -67,7 +68,9 @@ struct NewTemplateView: View {
                     }
 
                     Button {
-                        questions.append("")
+                        questions.append(
+                            QuestionItem(text: "")
+                        )
                     } label: {
                         Label(
                             "質問を追加",
@@ -75,12 +78,33 @@ struct NewTemplateView: View {
                         )
                     }
                 } header: {
-                    Text("質問項目")
+                    HStack {
+                        Text("質問項目")
+
+                        Spacer()
+
+                        Button {
+                            showingQuestionReorder = true
+                        } label: {
+                            Label(
+                                "並び替え",
+                                systemImage: "arrow.up.arrow.down"
+                            )
+                        }
+                        .font(.footnote)
+                        .labelStyle(.titleAndIcon)
+                        .textCase(nil)
+                    }
                 } footer: {
                     Text(
                         "記事を書くときに回答する質問を自由に追加できます。"
                     )
                 }
+            }
+            .sheet(isPresented: $showingQuestionReorder) {
+                QuestionReorderView(
+                    questions: $questions
+                )
             }
             .navigationTitle(
                 editingTemplate == nil
@@ -117,7 +141,9 @@ struct NewTemplateView: View {
             }
 
             templateName = editingTemplate.name
-            questions = editingTemplate.questions
+            questions = editingTemplate.questions.map {
+                QuestionItem(text: $0)
+            }
         }
     }
 
@@ -126,12 +152,12 @@ struct NewTemplateView: View {
             templateStore.update(
                 id: editingTemplate.id,
                 name: templateName,
-                questions: questions
+                questions: questions.map(\.text)
             )
         } else {
             templateStore.add(
                 name: templateName,
-                questions: questions
+                questions: questions.map(\.text)
             )
         }
 

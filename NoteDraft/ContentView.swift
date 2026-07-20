@@ -222,7 +222,7 @@ struct ContentView: View {
                     draftList
                 }
             }
-            .navigationTitle("記事設計")
+            .navigationTitle("記事一覧")
             .searchable(
                 text: $searchText,
                 isPresented: $isSearchPresented,

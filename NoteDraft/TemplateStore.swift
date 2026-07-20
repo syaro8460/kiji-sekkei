@@ -82,6 +82,30 @@ final class TemplateStore: ObservableObject {
         customTemplates.append(duplicatedTemplate)
     }
     
+    func move(
+        from source: IndexSet,
+        to destination: Int
+    ) {
+        let movingTemplates = source.map {
+            customTemplates[$0]
+        }
+
+        customTemplates.removeAll {
+            movingTemplates.contains($0)
+        }
+
+        var adjustedDestination = destination
+
+        for index in source where index < destination {
+            adjustedDestination -= 1
+        }
+
+        customTemplates.insert(
+            contentsOf: movingTemplates,
+            at: adjustedDestination
+        )
+    }
+    
     func update(
         id: UUID,
         name: String,
