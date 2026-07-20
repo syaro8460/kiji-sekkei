@@ -5,6 +5,7 @@ struct TemplateListView: View {
 
     @State private var showingNewTemplate = false
     @State private var pendingDeleteTemplateID: UUID?
+    @State private var editingTemplate: ArticleTemplate?
 
     var body: some View {
         List {
@@ -34,6 +35,16 @@ struct TemplateListView: View {
                                 edge: .trailing,
                                 allowsFullSwipe: false
                             ) {
+                                Button {
+                                    editingTemplate = template
+                                } label: {
+                                    Label(
+                                        "編集",
+                                        systemImage: "pencil"
+                                    )
+                                }
+                                .tint(.blue)
+
                                 Button(
                                     "削除",
                                     role: .destructive
@@ -62,7 +73,14 @@ struct TemplateListView: View {
             isPresented: $showingNewTemplate
         ) {
             NewTemplateView(
-                templateStore: templateStore
+                templateStore: templateStore,
+                editingTemplate: nil
+            )
+        }
+        .sheet(item: $editingTemplate) { template in
+            NewTemplateView(
+                templateStore: templateStore,
+                editingTemplate: template
             )
         }
         .alert(

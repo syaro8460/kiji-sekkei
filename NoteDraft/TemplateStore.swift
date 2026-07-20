@@ -65,6 +65,47 @@ final class TemplateStore: ObservableObject {
         }
     }
 
+    func update(
+        id: UUID,
+        name: String,
+        questions: [String]
+    ) {
+        guard let index = customTemplates.firstIndex(
+            where: { $0.id == id }
+        ) else {
+            return
+        }
+
+        let trimmedName = name.trimmingCharacters(
+            in: .whitespacesAndNewlines
+        )
+
+        let cleanedQuestions = questions
+            .map {
+                $0.trimmingCharacters(
+                    in: .whitespacesAndNewlines
+                )
+            }
+            .filter {
+                !$0.isEmpty
+            }
+
+        guard
+            !trimmedName.isEmpty,
+            !cleanedQuestions.isEmpty
+        else {
+            return
+        }
+
+        customTemplates[index] = ArticleTemplate(
+            id: id,
+            name: trimmedName,
+            questions: cleanedQuestions,
+            iconName: customTemplates[index].iconName,
+            isBuiltIn: false
+        )
+    }
+    
     private func save() {
         do {
             let data = try JSONEncoder().encode(

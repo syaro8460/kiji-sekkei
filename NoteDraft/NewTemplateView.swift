@@ -4,6 +4,8 @@ struct NewTemplateView: View {
     @Environment(\.dismiss) private var dismiss
 
     @ObservedObject var templateStore: TemplateStore
+    
+    let editingTemplate: ArticleTemplate?
 
     @State private var templateName = ""
     @State private var questions = [""]
@@ -80,7 +82,11 @@ struct NewTemplateView: View {
                     )
                 }
             }
-            .navigationTitle("テンプレート作成")
+            .navigationTitle(
+                editingTemplate == nil
+                ? "テンプレート作成"
+                : "テンプレート編集"
+            )
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(
@@ -101,13 +107,29 @@ struct NewTemplateView: View {
                 }
             }
         }
+        .onAppear {
+            guard let editingTemplate else {
+                return
+            }
+
+            templateName = editingTemplate.name
+            questions = editingTemplate.questions
+        }
     }
 
     private func saveTemplate() {
-        templateStore.add(
-            name: templateName,
-            questions: questions
-        )
+        if let editingTemplate {
+            templateStore.update(
+                id: editingTemplate.id,
+                name: templateName,
+                questions: questions
+            )
+        } else {
+            templateStore.add(
+                name: templateName,
+                questions: questions
+            )
+        }
 
         dismiss()
     }
