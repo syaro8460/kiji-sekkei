@@ -252,30 +252,48 @@ struct ContentView: View {
                 prompt: "検索"
             )
             .toolbar {
-                ToolbarItemGroup(placement: .topBarLeading) {
-                    NavigationLink {
-                        TemplateListView(
-                            templateStore: templateStore
-                        )
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "square.grid.2x2")
-                            Text("テンプレート")
+                ToolbarItem(placement: .topBarLeading) {
+                    Menu {
+                        NavigationLink {
+                            TemplateListView(
+                                templateStore: templateStore
+                            )
+                        } label: {
+                            Label(
+                                "テンプレート",
+                                systemImage: "square.grid.2x2"
+                            )
                         }
-                    }
-                    .accessibilityLabel("テンプレートを管理")
 
-                    NavigationLink {
-                        TrashView(
-                            store: store
-                        )
-                    } label: {
-                        HStack(spacing: 5) {
-                            Image(systemName: "trash")
-                            Text("ゴミ箱")
+                        NavigationLink {
+                            TrashView(
+                                store: store
+                            )
+                        } label: {
+                            Label(
+                                "ゴミ箱",
+                                systemImage: "trash"
+                            )
                         }
+
+                        Divider()
+
+                        NavigationLink {
+                            SettingsView(
+                                store: store,
+                                templateStore: templateStore
+                            )
+                        } label: {
+                            Label(
+                                "設定",
+                                systemImage: "gearshape"
+                            )
+                        }
+
+                    } label: {
+                        Image(systemName: "line.3.horizontal")
                     }
-                    .accessibilityLabel("ゴミ箱")
+                    .accessibilityLabel("メニュー")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -285,18 +303,6 @@ struct ContentView: View {
                         Image(systemName: "plus")
                     }
                     .accessibilityLabel("新しい記事を作成")
-                }
-                
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        SettingsView(
-                            store: store,
-                            templateStore: templateStore
-                        )
-                    } label: {
-                        Image(systemName: "gearshape")
-                    }
-                    .accessibilityLabel("設定")
                 }
             }
             .navigationDestination(for: UUID.self) { draftID in
