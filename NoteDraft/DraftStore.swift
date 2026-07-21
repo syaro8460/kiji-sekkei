@@ -14,9 +14,32 @@ final class DraftStore: ObservableObject {
         load()
     }
 
+    var activeDrafts: [ArticleDraft] {
+        drafts.filter {
+            $0.status == .active
+        }
+    }
+
+    var trashedDrafts: [ArticleDraft] {
+        drafts.filter {
+            $0.status == .trashed
+        }
+    }
+
     var sortedDraftIDs: [UUID] {
-        drafts
-            .sorted { $0.updatedAt > $1.updatedAt }
+        activeDrafts
+            .sorted {
+                $0.updatedAt > $1.updatedAt
+            }
+            .map(\.id)
+    }
+
+    var trashedDraftIDs: [UUID] {
+        trashedDrafts
+            .sorted {
+                ($0.deletedAt ?? .distantPast) >
+                ($1.deletedAt ?? .distantPast)
+            }
             .map(\.id)
     }
 
@@ -24,7 +47,29 @@ final class DraftStore: ObservableObject {
         drafts.append(draft)
     }
 
-    func delete(id: UUID) {
+    func moveToTrash(id: UUID) {
+        guard let index = drafts.firstIndex(
+            where: { $0.id == id }
+        ) else {
+            return
+        }
+        drafts[index].status = .trashed
+        drafts[index].deletedAt = Date()
+    }
+
+    func restore(id: UUID) {
+        guard let index = drafts.firstIndex(
+            where: { $0.id == id }
+        ) else {
+            return
+        }
+
+        drafts[index].status = .active
+        drafts[index].deletedAt = nil
+        drafts[index].updatedAt = Date()
+    }
+
+    func deletePermanently(id: UUID) {
         drafts.removeAll { draft in
             draft.id == id
         }

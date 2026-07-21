@@ -8,6 +8,13 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
     var answers: [String: String]
     var tags: [String] = []
     var updatedAt: Date
+    var status: DraftStatus = .active
+    var deletedAt: Date?
+
+    enum DraftStatus: String, Codable {
+        case active
+        case trashed
+    }
     
     init(
         id: UUID = UUID(),
