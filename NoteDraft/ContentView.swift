@@ -7,7 +7,6 @@ struct ContentView: View {
     @State private var navigationPath: [UUID] = []
     @State private var showingNewDraft = false
     @State private var newlyCreatedDraftID: UUID?
-    @State private var pendingDeleteDraftID: UUID?
     @State private var searchText = ""
     @State private var isSearchPresented = false
     @AppStorage("draftSortOrder")
@@ -15,26 +14,26 @@ struct ContentView: View {
     
     private var filteredDrafts: [ArticleDraft] {
         let sortedDrafts: [ArticleDraft]
-        
+
         switch sortOrder {
         case .updatedNewest:
-            sortedDrafts = store.drafts.sorted {
+            sortedDrafts = store.activeDrafts.sorted {
                 $0.updatedAt > $1.updatedAt
             }
 
         case .updatedOldest:
-            sortedDrafts = store.drafts.sorted {
+            sortedDrafts = store.activeDrafts.sorted {
                 $0.updatedAt < $1.updatedAt
             }
 
         case .titleAscending:
-            sortedDrafts = store.drafts.sorted {
+            sortedDrafts = store.activeDrafts.sorted {
                 $0.title.localizedCompare($1.title)
                     == .orderedAscending
             }
 
         case .titleDescending:
-            sortedDrafts = store.drafts.sorted {
+            sortedDrafts = store.activeDrafts.sorted {
                 $0.title.localizedCompare($1.title)
                     == .orderedDescending
             }
@@ -61,7 +60,7 @@ struct ContentView: View {
             }
         }
     }
-    
+
     private func isFuzzyMatch(
         _ query: String,
         target: String
@@ -240,7 +239,7 @@ struct ContentView: View {
     var body: some View {
         NavigationStack(path: $navigationPath) {
             Group {
-                if store.drafts.isEmpty {
+                if store.activeDrafts.isEmpty {
                     emptyView
                 } else {
                     draftList
@@ -253,7 +252,7 @@ struct ContentView: View {
                 prompt: "検索"
             )
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     NavigationLink {
                         TemplateListView(
                             templateStore: templateStore
@@ -261,11 +260,22 @@ struct ContentView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "square.grid.2x2")
-
                             Text("テンプレート")
                         }
                     }
                     .accessibilityLabel("テンプレートを管理")
+
+                    NavigationLink {
+                        TrashView(
+                            store: store
+                        )
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "trash")
+                            Text("ゴミ箱")
+                        }
+                    }
+                    .accessibilityLabel("ゴミ箱")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -305,26 +315,6 @@ struct ContentView: View {
                 openNewDraftWhenSheetCloses(
                     isShowing: isShowing
                 )
-            }
-            .alert(
-                "記事を削除しますか？",
-                isPresented: deleteAlertBinding
-            ) {
-                Button(
-                    "削除",
-                    role: .destructive
-                ) {
-                    confirmDelete()
-                }
-
-                Button(
-                    "キャンセル",
-                    role: .cancel
-                ) {
-                    pendingDeleteDraftID = nil
-                }
-            } message: {
-                Text("削除した記事は元に戻せません。")
             }
         }
     }
@@ -383,7 +373,7 @@ struct ContentView: View {
                                     "削除",
                                     role: .destructive
                                 ) {
-                                    pendingDeleteDraftID = draft.id
+                                    store.moveToTrash(id: draft.id)
                                 }
                             }
                             .swipeActions(
@@ -456,28 +446,6 @@ struct ContentView: View {
         }
 
         navigationPath.append(duplicatedDraft.id)
-    }
-
-    private var deleteAlertBinding: Binding<Bool> {
-        Binding(
-            get: {
-                pendingDeleteDraftID != nil
-            },
-            set: { isPresented in
-                if !isPresented {
-                    pendingDeleteDraftID = nil
-                }
-            }
-        )
-    }
-
-    private func confirmDelete() {
-        guard let draftID = pendingDeleteDraftID else {
-            return
-        }
-
-        store.delete(id: draftID)
-        pendingDeleteDraftID = nil
     }
 }
 

@@ -16,16 +16,23 @@ struct DraftRowView: View {
                     .lineLimit(2)
                 
                 if !draft.tags.isEmpty {
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 6) {
-                            ForEach(draft.tags, id: \.self) { tag in
-                                TagChipView(
-                                    tag: tag,
-                                    onTap: {
-                                        onTagTap?(tag)
-                                    }
-                                )
-                            }
+                    HStack(spacing: 6) {
+                        ForEach(draft.tags.prefix(2), id: \.self) { tag in
+                            TagChipView(
+                                tag: tag,
+                                onTap: {
+                                    onTagTap?(tag)
+                                }
+                            )
+                        }
+                        if draft.tags.count > 2 {
+                            Text("+\(draft.tags.count - 2)件")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(.thinMaterial)
+                                .clipShape(Capsule())
                         }
                     }
                 }
