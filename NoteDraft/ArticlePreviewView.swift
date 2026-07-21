@@ -84,12 +84,13 @@ struct ArticlePreviewView: View {
     private func generateReviewArticle() -> String {
         generateStructuredArticle(
             questions: [
-                "なぜこの商品やサービスを選んだ？",
+                "何をレビューする？",
+                "購入・利用した理由は？",
                 "使う前に期待していたことは？",
-                "実際に使って良かったところは？",
-                "気になったところは？",
+                "実際に良かった点は？",
+                "気になった点は？",
                 "どんな人におすすめ？",
-                "最終的な感想は？"
+                "最後に一言でまとめると？"
             ]
         )
     }
@@ -97,12 +98,13 @@ struct ArticlePreviewView: View {
     private func generateComparisonArticle() -> String {
         generateStructuredArticle(
             questions: [
-                "比較しようと思った理由は？",
                 "何と何を比較する？",
-                "それぞれの良かったところは？",
-                "それぞれの気になったところは？",
+                "比較しようと思った理由は？",
+                "それぞれの良かった点は？",
+                "それぞれの気になった点は？",
                 "最終的にどちらを選んだ？",
-                "その理由は？"
+                "その理由は？",
+                "どんな人にはこちらがおすすめ？"
             ]
         )
     }
@@ -110,14 +112,13 @@ struct ArticlePreviewView: View {
     private func generateNotSelectedArticle() -> String {
         generateStructuredArticle(
             questions: [
-                "なぜ検討した？",
-                "何を期待していた？",
-                "なぜ選ばなかった？",
-                "迷ったポイントは？",
+                "検討していた商品・サービスは？",
+                "なぜ気になっていた？",
+                "選ばなかった理由は？",
                 "代わりに何を選んだ？",
-                "代わりの方法で実際どうだった？",
-                "どんな人なら選んでもいいと思う？",
-                "今振り返ってどう思う？"
+                "実際に代わりの選択はどうだった？",
+                "どんな人なら向いていると思う？",
+                "最後に一言でまとめると？"
             ]
         )
     }
@@ -127,10 +128,11 @@ struct ArticlePreviewView: View {
             questions: [
                 "何を体験した？",
                 "体験する前はどう思っていた？",
-                "実際に起きたことは？",
+                "実際に体験してどうだった？",
                 "印象に残ったことは？",
-                "困ったことや失敗は？",
-                "この体験から学んだことは？"
+                "困ったことや失敗したことは？",
+                "この体験で学んだことは？",
+                "最後に一言でまとめると？"
             ]
         )
     }
@@ -145,19 +147,24 @@ struct ArticlePreviewView: View {
         questions: [String]
     ) -> String {
         var result = """
-        タイトル：\(draft.title)
+        【タイトル】
+        \(draft.title)
 
-        記事種類：\(draft.articleType)
+        【記事種類】
+        \(draft.articleType)
 
+        
+        
         """
 
-        for (
-            index,
-            question
-        ) in questions.enumerated() {
+        for (index, question) in questions.enumerated() {
             result += """
-            質問\(index + 1)：\(question)
-            回答：\(answer(for: question))
+            【質問\(index + 1)】
+            \(question)
+
+            【回答】
+            \(answer(for: question))
+
 
             """
         }
