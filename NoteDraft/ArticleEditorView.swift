@@ -1,10 +1,16 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct ArticleEditorView: View {
     @Binding var draft: ArticleDraft
     let templateStore: TemplateStore
     
     @State private var newTag = ""
+    @State private var isExportingMarkdown = false
+    @State private var markdownDocument = MarkdownDocument()
+    @State private var showExportSuccessAlert = false
+    @State private var showExportErrorAlert = false
+    @State private var exportErrorMessage = ""
     
     @FocusState private var isTagFieldFocused: Bool
 
@@ -120,7 +126,8 @@ struct ArticleEditorView: View {
                 }
             }
 
-            Section {
+            Section("書き出し") {
+
                 NavigationLink {
                     ArticlePreviewView(draft: draft)
                 } label: {
@@ -128,7 +135,23 @@ struct ArticleEditorView: View {
                         "記事構成を作成",
                         systemImage: "doc.text.magnifyingglass"
                     )
-                    .frame(maxWidth: .infinity)
+                }
+
+                Button {
+
+                    let markdown = MarkdownExporter().export(draft)
+                    
+                    markdownDocument = MarkdownDocument(
+                        text: markdown
+                    )
+
+                    isExportingMarkdown = true
+
+                } label: {
+                    Label(
+                        "記事を書き出す",
+                        systemImage: "square.and.arrow.down"
+                    )
                 }
             }
         }
@@ -137,6 +160,42 @@ struct ArticleEditorView: View {
         }
         .navigationTitle("記事の内容")
         .navigationBarTitleDisplayMode(.inline)
+        
+        .fileExporter(
+            isPresented: $isExportingMarkdown,
+            document: markdownDocument,
+            contentType: UTType(filenameExtension: "md") ?? .plainText,
+            defaultFilename: exportFileName
+        ) { result in
+
+            switch result {
+
+            case .success:
+                showExportSuccessAlert = true
+
+            case .failure(let error):
+                exportErrorMessage = error.localizedDescription
+                showExportErrorAlert = true
+            }
+        }
+        
+        .alert(
+            "書き出し完了",
+            isPresented: $showExportSuccessAlert
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text("記事を書き出しました。")
+        }
+
+        .alert(
+            "書き出しに失敗しました",
+            isPresented: $showExportErrorAlert
+        ) {
+            Button("OK", role: .cancel) { }
+        } message: {
+            Text(exportErrorMessage)
+        }
     }
 
     private var titleBinding: Binding<String> {
@@ -186,6 +245,13 @@ struct ArticleEditorView: View {
         )
     }
 
+    private var exportFileName: String {
+        let title = draft.title
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return title.isEmpty ? "Article" : title
+    }
+    
     private func updateDate() {
         draft.updatedAt = Date()
     }
