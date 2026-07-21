@@ -252,7 +252,7 @@ struct ContentView: View {
                 prompt: "検索"
             )
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     NavigationLink {
                         TemplateListView(
                             templateStore: templateStore
@@ -260,11 +260,22 @@ struct ContentView: View {
                     } label: {
                         HStack(spacing: 5) {
                             Image(systemName: "square.grid.2x2")
-
                             Text("テンプレート")
                         }
                     }
                     .accessibilityLabel("テンプレートを管理")
+
+                    NavigationLink {
+                        TrashView(
+                            store: store
+                        )
+                    } label: {
+                        HStack(spacing: 5) {
+                            Image(systemName: "trash")
+                            Text("ゴミ箱")
+                        }
+                    }
+                    .accessibilityLabel("ゴミ箱")
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {

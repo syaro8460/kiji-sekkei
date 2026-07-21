@@ -21,9 +21,14 @@ final class DraftStore: ObservableObject {
     }
 
     var trashedDrafts: [ArticleDraft] {
-        drafts.filter {
-            $0.status == .trashed
-        }
+        drafts
+            .filter {
+                $0.status == .trashed
+            }
+            .sorted {
+                ($0.deletedAt ?? .distantPast) >
+                ($1.deletedAt ?? .distantPast)
+            }
     }
 
     var sortedDraftIDs: [UUID] {
