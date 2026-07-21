@@ -147,6 +147,11 @@ final class TemplateStore: ObservableObject {
         )
     }
     
+    func restore(from backupData: BackupData) {
+        customTemplates = backupData.templates
+        save()
+    }
+    
     private func save() {
         do {
             let data = try JSONEncoder().encode(
