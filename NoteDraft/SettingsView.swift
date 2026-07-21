@@ -10,6 +10,7 @@ struct SettingsView: View {
 
     @State private var isExporting = false
     @State private var backupDocument = BackupDocument()
+    @State private var isImporting = false
     
     var body: some View {
         List {
@@ -40,7 +41,7 @@ struct SettingsView: View {
                 }
 
                 Button("JSONを読み込む") {
-                    // TODO: JSONインポート
+                    isImporting = true
                 }
             }
 
@@ -62,6 +63,33 @@ struct SettingsView: View {
             case .success:
                 print("バックアップを書き出しました")
             case .failure(let error):
+                print(error.localizedDescription)
+            }
+        }
+        
+        .fileImporter(
+            isPresented: $isImporting,
+            allowedContentTypes: [.json]
+        ) { result in
+            do {
+                let url = try result.get()
+
+                guard url.startAccessingSecurityScopedResource() else {
+                    throw CocoaError(.fileReadNoPermission)
+                }
+
+                defer {
+                    url.stopAccessingSecurityScopedResource()
+                }
+
+                let data = try Data(contentsOf: url)
+                let backupData = try BackupManager().decode(from: data)
+
+                store.restore(from: backupData)
+                templateStore.restore(from: backupData)
+
+                print("バックアップを読み込みました")
+            } catch {
                 print(error.localizedDescription)
             }
         }

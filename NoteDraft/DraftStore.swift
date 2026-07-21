@@ -62,6 +62,11 @@ final class DraftStore: ObservableObject {
         )
     }
     
+    func restore(from backupData: BackupData) {
+        drafts = backupData.drafts
+        save()
+    }
+    
     private func save() {
         guard let data = try? JSONEncoder().encode(drafts) else {
             return
