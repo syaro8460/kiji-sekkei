@@ -1,10 +1,12 @@
 import SwiftUI
 
 struct SettingsView: View {
-    
+    @ObservedObject var store: DraftStore
+    @ObservedObject var templateStore: TemplateStore
+
     @AppStorage("draftSortOrder")
     private var sortOrder: DraftSortOrder = .updatedNewest
-    
+
     var body: some View {
         List {
             Section("表示") {
@@ -38,6 +40,9 @@ struct SettingsView: View {
 
 #Preview {
     NavigationStack {
-        SettingsView()
+        SettingsView(
+            store: DraftStore(),
+            templateStore: TemplateStore()
+        )
     }
 }

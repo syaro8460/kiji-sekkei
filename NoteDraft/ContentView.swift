@@ -279,7 +279,10 @@ struct ContentView: View {
                 
                 ToolbarItem(placement: .topBarTrailing) {
                     NavigationLink {
-                        SettingsView()
+                        SettingsView(
+                            store: store,
+                            templateStore: templateStore
+                        )
                     } label: {
                         Image(systemName: "gearshape")
                     }

@@ -51,6 +51,17 @@ final class DraftStore: ObservableObject {
         return duplicatedDraft
     }
     
+    func createBackupData(
+        templateStore: TemplateStore
+    ) -> BackupData {
+        BackupData(
+            schemaVersion: 1,
+            exportedAt: Date(),
+            drafts: drafts,
+            templates: templateStore.customTemplates
+        )
+    }
+    
     private func save() {
         guard let data = try? JSONEncoder().encode(drafts) else {
             return
