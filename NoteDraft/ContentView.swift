@@ -328,11 +328,14 @@ struct ContentView: View {
     private var emptyView: some View {
         ContentUnavailableView {
             Label(
-                "記事がありません",
+                "まだ記事がありません",
                 systemImage: "doc.text"
             )
         } description: {
-            Text("右上の＋から新しい記事を作成できます。")
+            Text("""
+    記事を書く前のアイデアや構成を整理できます。
+    最初の記事を作成してみましょう。
+    """)
         } actions: {
             Button("新しい記事を作成") {
                 showingNewDraft = true
@@ -360,16 +363,13 @@ struct ContentView: View {
                                 DraftRowView(
                                     draft: draft,
                                     onTagTap: { tag in
-                                        // FIXME:
-                                        // タグタップで searchText を更新した場合、
-                                        // .searchable のクリアボタン押下時に
-                                        // キーボードが表示される。
-                                        // dismissSearch() / isPresented では改善せず。
-                                        // SwiftUI の挙動と思われるため現状は保留。
                                         searchText = tag
                                         isSearchPresented = false
                                     }
                                 )
+                            }
+                            .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+                                dimensions[.leading]
                             }
                             .swipeActions(
                                 edge: .trailing,

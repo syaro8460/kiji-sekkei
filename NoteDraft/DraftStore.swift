@@ -12,6 +12,7 @@ final class DraftStore: ObservableObject {
 
     init() {
         load()
+        removeExpiredTrash()
     }
 
     var activeDrafts: [ArticleDraft] {
@@ -77,6 +78,25 @@ final class DraftStore: ObservableObject {
     func deletePermanently(id: UUID) {
         drafts.removeAll { draft in
             draft.id == id
+        }
+    }
+    
+    func removeExpiredTrash() {
+        let expirationDate = Calendar.current.date(
+            byAdding: .day,
+            value: -30,
+            to: Date()
+        ) ?? Date()
+
+        drafts.removeAll { draft in
+            guard
+                draft.status == .trashed,
+                let deletedAt = draft.deletedAt
+            else {
+                return false
+            }
+
+            return deletedAt < expirationDate
         }
     }
 
