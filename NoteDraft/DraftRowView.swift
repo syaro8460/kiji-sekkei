@@ -2,6 +2,7 @@ import SwiftUI
 
 struct DraftRowView: View {
     let draft: ArticleDraft
+    var showsTrashRemainingDays = false
     var onTagTap: ((String) -> Void)?
 
     var body: some View {
@@ -35,6 +36,15 @@ struct DraftRowView: View {
                                 .clipShape(Capsule())
                         }
                     }
+                }
+                
+                if
+                    showsTrashRemainingDays,
+                    let remainingDays = draft.remainingTrashDays
+                {
+                    Text("あと\(remainingDays)日で完全に削除されます")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
                 }
 
                 HStack(spacing: 6) {

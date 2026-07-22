@@ -363,16 +363,13 @@ struct ContentView: View {
                                 DraftRowView(
                                     draft: draft,
                                     onTagTap: { tag in
-                                        // FIXME:
-                                        // タグタップで searchText を更新した場合、
-                                        // .searchable のクリアボタン押下時に
-                                        // キーボードが表示される。
-                                        // dismissSearch() / isPresented では改善せず。
-                                        // SwiftUI の挙動と思われるため現状は保留。
                                         searchText = tag
                                         isSearchPresented = false
                                     }
                                 )
+                            }
+                            .alignmentGuide(.listRowSeparatorLeading) { dimensions in
+                                dimensions[.leading]
                             }
                             .swipeActions(
                                 edge: .trailing,

@@ -22,6 +22,7 @@ struct TrashView: View {
                     ForEach(store.trashedDrafts) { draft in
                         DraftRowView(
                             draft: draft,
+                            showsTrashRemainingDays: true,
                             onTagTap: { _ in }
                         )
                         .swipeActions(

@@ -11,6 +11,29 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
     var status: DraftStatus = .active
     var deletedAt: Date?
 
+    var remainingTrashDays: Int? {
+        guard
+            status == .trashed,
+            let deletedAt
+        else {
+            return nil
+        }
+
+        let deletionDate = Calendar.current.date(
+            byAdding: .day,
+            value: 30,
+            to: deletedAt
+        ) ?? deletedAt
+
+        let remainingDays = Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: Date()),
+            to: Calendar.current.startOfDay(for: deletionDate)
+        ).day ?? 0
+
+        return max(0, remainingDays)
+    }
+    
     enum DraftStatus: String, Codable {
         case active
         case trashed
