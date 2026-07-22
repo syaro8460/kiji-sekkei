@@ -59,8 +59,11 @@ final class DraftStore: ObservableObject {
         ) else {
             return
         }
+
         drafts[index].status = .trashed
         drafts[index].deletedAt = Date()
+
+        save()
     }
 
     func restore(id: UUID) {
@@ -73,6 +76,8 @@ final class DraftStore: ObservableObject {
         drafts[index].status = .active
         drafts[index].deletedAt = nil
         drafts[index].updatedAt = Date()
+
+        save()
     }
 
     func deletePermanently(id: UUID) {

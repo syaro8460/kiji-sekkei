@@ -65,6 +65,8 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
         case answers
         case tags
         case updatedAt
+        case status
+        case deletedAt
     }
     
     init(from decoder: Decoder) throws {
@@ -102,6 +104,16 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
             forKey: .updatedAt
         ) ?? Date()
         
+        let decodedStatus = try container.decodeIfPresent(
+            DraftStatus.self,
+            forKey: .status
+        ) ?? .active
+
+        let decodedDeletedAt = try container.decodeIfPresent(
+            Date.self,
+            forKey: .deletedAt
+        )
+        
         let decodedQuestions: [String]
         
         if let savedQuestions = try container.decodeIfPresent(
@@ -124,5 +136,7 @@ struct ArticleDraft: Identifiable, Codable, Equatable {
         answers = decodedAnswers
         tags = decodedTags
         updatedAt = decodedUpdatedAt
+        status = decodedStatus
+        deletedAt = decodedDeletedAt
     }
 }
