@@ -328,11 +328,14 @@ struct ContentView: View {
     private var emptyView: some View {
         ContentUnavailableView {
             Label(
-                "記事がありません",
+                "まだ記事がありません",
                 systemImage: "doc.text"
             )
         } description: {
-            Text("右上の＋から新しい記事を作成できます。")
+            Text("""
+    記事を書く前のアイデアや構成を整理できます。
+    最初の記事を作成してみましょう。
+    """)
         } actions: {
             Button("新しい記事を作成") {
                 showingNewDraft = true
