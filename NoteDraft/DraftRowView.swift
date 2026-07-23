@@ -18,7 +18,7 @@ struct DraftRowView: View {
                 
                 if !draft.tags.isEmpty {
                     HStack(spacing: 6) {
-                        ForEach(draft.tags.prefix(2), id: \.self) { tag in
+                        ForEach(draft.tags.prefix(1), id: \.self) { tag in
                             TagChipView(
                                 tag: tag,
                                 onTap: {
@@ -26,8 +26,8 @@ struct DraftRowView: View {
                                 }
                             )
                         }
-                        if draft.tags.count > 2 {
-                            Text("+\(draft.tags.count - 2)件")
+                        if draft.tags.count > 1 {
+                            Text("+\(draft.tags.count - 1)件")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 8)

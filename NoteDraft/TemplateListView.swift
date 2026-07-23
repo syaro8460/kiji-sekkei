@@ -18,7 +18,7 @@ struct TemplateListView: View {
                 }
             }
 
-            Section("自作テンプレート") {
+            Section {
                 if templateStore.customTemplates.isEmpty {
                     ContentUnavailableView(
                         "自作テンプレートはありません",
@@ -28,9 +28,7 @@ struct TemplateListView: View {
                         )
                     )
                 } else {
-                    ForEach(
-                        templateStore.customTemplates
-                    ) { template in
+                    ForEach(templateStore.customTemplates) { template in
                         Button {
                             editingTemplate = template
                         } label: {
@@ -43,47 +41,54 @@ struct TemplateListView: View {
                         }
                         .buttonStyle(.plain)
                         .swipeActions(
-                                edge: .trailing,
-                                allowsFullSwipe: false
+                            edge: .trailing,
+                            allowsFullSwipe: false
+                        ) {
+                            Button(
+                                "削除",
+                                role: .destructive
                             ) {
-                                Button(
-                                    "削除",
-                                    role: .destructive
-                                ) {
-                                    pendingDeleteTemplateID =
-                                        template.id
-                                }
+                                pendingDeleteTemplateID = template.id
                             }
+                        }
                         .swipeActions(
-                                edge: .leading,
-                                allowsFullSwipe: true
-                            ) {
-                                Button {
-                                    templateStore.duplicate(
-                                        id: template.id
-                                    )
-                                } label: {
-                                    Label(
-                                        "複製",
-                                        systemImage: "doc.on.doc"
-                                    )
-                                }
-                                .tint(.blue)
+                            edge: .leading,
+                            allowsFullSwipe: true
+                        ) {
+                            Button {
+                                templateStore.duplicate(id: template.id)
+                            } label: {
+                                Label(
+                                    "複製",
+                                    systemImage: "doc.on.doc"
+                                )
                             }
+                            .tint(.blue)
+                        }
                     }
+                }
+            } header: {
+                HStack {
+                    Text("自作テンプレート")
+
+                    Spacer()
+
+                    Button {
+                        showingReorder = true
+                    } label: {
+                        Label(
+                            "並び替え",
+                            systemImage: "arrow.up.arrow.down"
+                        )
+                    }
+                    .font(.footnote)
+                    .labelStyle(.titleAndIcon)
+                    .textCase(nil)
                 }
             }
         }
         .navigationTitle("テンプレート")
         .toolbar {
-            ToolbarItem(
-                placement: .topBarLeading
-            ) {
-                Button("並び替え") {
-                    showingReorder = true
-                }
-            }
-
             ToolbarItem(
                 placement: .topBarTrailing
             ) {
