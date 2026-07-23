@@ -15,6 +15,8 @@ struct TagChipView: View {
                         tag,
                         systemImage: "tag.fill"
                     )
+                    .lineLimit(1)
+                    .truncationMode(.tail)
                 }
                 .buttonStyle(TagChipButtonStyle())
             } else {
@@ -22,6 +24,8 @@ struct TagChipView: View {
                     tag,
                     systemImage: "tag.fill"
                 )
+                .lineLimit(1)
+                .truncationMode(.tail)
             }
 
             if let onDelete {
