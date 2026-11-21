@@ -236,6 +236,21 @@ struct ContentView: View {
         ]
     }
     
+    private var swiftDataErrorMessage: String {
+        let error = store.swiftDataSaveError
+            ?? "保存中にエラーが発生しました。"
+
+        if store.hasUnsavedSwiftDataChanges {
+            return """
+            記事の変更がまだ保存されていません。
+            \(error)
+            アプリを終了せずに再試行してください。
+            """
+        }
+
+        return error
+    }
+    
     var body: some View {
         NavigationStack(path: $navigationPath) {
             Group {
@@ -320,6 +335,48 @@ struct ContentView: View {
             .onChange(of: showingNewDraft) { _, isShowing in
                 openNewDraftWhenSheetCloses(
                     isShowing: isShowing
+                )
+            }
+            
+            .alert(
+                "SwiftDataの保存エラー",
+                isPresented: Binding(
+                    get: { store.swiftDataSaveError != nil },
+                    set: { if !$0 { store.clearSwiftDataSaveError() } }
+                )
+            ) {
+                Button("再試行") {
+                    store.retrySwiftDataSave()
+                }
+                Button("閉じる", role: .cancel) {
+                    store.clearSwiftDataSaveError()
+                }
+            } message: {
+                Text(swiftDataErrorMessage)
+            }
+
+            .alert(
+                "記事の保存に失敗しました",
+                isPresented: Binding(
+                    get: { store.swiftDataSaveError != nil },
+                    set: { isPresented in
+                        if !isPresented {
+                            store.clearSwiftDataSaveError()
+                        }
+                    }
+                )
+            ) {
+                Button("再試行") {
+                    store.retrySwiftDataSave()
+                }
+                
+                Button("閉じる", role: .cancel) {
+                    store.clearSwiftDataSaveError()
+                }
+            } message: {
+                Text(
+                    store.swiftDataSaveError
+                        ?? "保存中にエラーが発生しました。"
                 )
             }
         }
