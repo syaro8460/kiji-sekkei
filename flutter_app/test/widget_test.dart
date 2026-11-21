@@ -39,7 +39,7 @@ void main() {
     await tester.tap(find.byTooltip('戻る'));
     await tester.pumpAndSettle();
 
-    final save = find.widgetWithText(FilledButton, '保存');
+    final save = find.widgetWithText(TextButton, '保存');
     await tester.ensureVisible(save);
     await tester.tap(save);
     await tester.pumpAndSettle();
@@ -164,7 +164,7 @@ void main() {
     await tap(find.text('週次レビュー'));
     expect(find.text('次にやること'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, '今週の記事');
-    final save = find.widgetWithText(FilledButton, '保存');
+    final save = find.widgetWithText(TextButton, '保存');
     await tester.ensureVisible(save);
     await tap(save);
 
@@ -182,4 +182,77 @@ void main() {
     await tap(find.text('今週の記事'));
     expect(find.text('次にやること'), findsOneWidget);
   });
+
+  testWidgets(
+    'saves and removes tags, and searches titles, answers, and tags',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(390, 640));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = ArticleDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      const id = 'f8888888-8888-4888-8888-888888888888';
+      await tester.runAsync(() async {
+        await database.saveDraft(
+          ArticleDraft(
+            id: id,
+            title: 'Release Notes',
+            articleType: '日記',
+            questions: ['概要'],
+            answers: {'概要': '今月のふりかえり'},
+          ),
+        );
+        await database.saveDraft(
+          ArticleDraft(
+            id: 'f9999999-9999-4999-8999-999999999999',
+            title: '別の記事',
+            articleType: '日記',
+            questions: [],
+          ),
+        );
+      });
+      await tester.pumpWidget(MyApp(database: database));
+      await tester.pumpAndSettle();
+
+      Future<void> tap(Finder finder) async {
+        await tester.tap(finder);
+        await tester.pumpAndSettle();
+      }
+
+      await tap(find.text('Release Notes'));
+      final input = find.widgetWithText(TextField, 'タグを追加');
+      await tester.enterText(input, ' 作業記録 ');
+      await tap(find.widgetWithText(TextButton, '追加'));
+      await tester.enterText(input, '作業記録');
+      await tap(find.widgetWithText(TextButton, '追加'));
+      expect(find.widgetWithText(InputChip, '作業記録'), findsOneWidget);
+      await tester.enterText(input, '未登録の入力');
+      final save = find.widgetWithText(TextButton, '保存');
+      await tap(save);
+      expect(find.widgetWithText(ActionChip, '未登録の入力'), findsOneWidget);
+
+      await tap(find.widgetWithText(ActionChip, '作業記録'));
+      expect(find.text('Release Notes'), findsOneWidget);
+      expect(find.text('別の記事'), findsNothing);
+      await tap(find.byTooltip('検索をクリア'));
+      expect(find.text('別の記事'), findsOneWidget);
+
+      final search = find.widgetWithText(TextField, '記事を検索');
+      await tester.enterText(search, 'RELEASE ふりかえり');
+      await tester.pumpAndSettle();
+      expect(find.text('Release Notes'), findsOneWidget);
+      expect(find.text('別の記事'), findsNothing);
+      await tester.enterText(search, '見つからない検索');
+      await tester.pumpAndSettle();
+      expect(find.text('条件に一致する記事はありません'), findsOneWidget);
+      await tap(find.byTooltip('検索をクリア'));
+
+      await tap(find.text('Release Notes'));
+      await tap(find.byTooltip('作業記録 のタグを削除'));
+      await tap(save);
+      final drafts = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      expect(drafts!.singleWhere((draft) => draft.id == id).tags, ['未登録の入力']);
+    },
+  );
 }

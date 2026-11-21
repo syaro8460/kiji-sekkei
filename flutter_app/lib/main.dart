@@ -55,6 +55,40 @@ class _ArticleList extends StatefulWidget {
 class _ArticleListState extends State<_ArticleList> {
   late Future<List<ArticleDraft>> _drafts = _loadDrafts();
 
+  final _search = TextEditingController();
+
+  @override
+  void dispose() {
+    _search.dispose();
+    super.dispose();
+  }
+
+  void _setSearch(String value) {
+    _search.value = TextEditingValue(
+      text: value,
+      selection: TextSelection.collapsed(offset: value.length),
+    );
+    setState(() {});
+  }
+
+  List<ArticleDraft> _filterDrafts(List<ArticleDraft> drafts) {
+    final query = _search.text.trim().toLowerCase();
+    if (query.isEmpty) return drafts;
+    final keywords = query.split(RegExp(r'\s+'));
+    return drafts.where((draft) {
+      final fields = [
+        draft.title,
+        draft.articleType,
+        ...draft.questions,
+        ...draft.answers.values,
+        ...draft.tags,
+      ].map((field) => field.toLowerCase()).toList();
+      return keywords.every(
+        (word) => fields.any((field) => field.contains(word)),
+      );
+    }).toList();
+  }
+
   Future<List<ArticleDraft>> _loadDrafts() =>
       widget.database.listDrafts(DraftStatus.active);
 
@@ -191,59 +225,112 @@ class _ArticleListState extends State<_ArticleList> {
       icon: const Icon(Icons.add),
       label: const Text('新しい記事'),
     ),
-    body: FutureBuilder<List<ArticleDraft>>(
-      future: _drafts,
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return const Center(child: CircularProgressIndicator());
-        }
-        if (snapshot.hasError) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('記事を読み込めませんでした。'),
-                TextButton(onPressed: _reload, child: const Text('再読み込み')),
-              ],
-            ),
-          );
-        }
-        final drafts = snapshot.requireData;
-        if (drafts.isEmpty) {
-          return const Center(child: Text('記事はまだありません'));
-        }
-        return ListView.separated(
-          padding: const EdgeInsets.only(bottom: 88),
-          itemCount: drafts.length,
-          separatorBuilder: (_, _) => const Divider(height: 1),
-          itemBuilder: (context, index) {
-            final draft = drafts[index];
-            return ListTile(
-              leading: const Icon(Icons.article_outlined),
-              title: Text(draft.title),
-              subtitle: Text(draft.articleType),
-              trailing: PopupMenuButton<void>(
-                tooltip: '記事の操作',
-                itemBuilder: (_) => [
-                  PopupMenuItem(
-                    onTap: () => Navigator.of(context).push<void>(
-                      MaterialPageRoute(
-                        builder: (context) => ArticlePreviewPage(draft: draft),
-                      ),
+    body: Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+          child: TextField(
+            controller: _search,
+            onChanged: (_) => setState(() {}),
+            textInputAction: TextInputAction.search,
+            decoration: InputDecoration(
+              labelText: '記事を検索',
+              prefixIcon: const Icon(Icons.search),
+              border: const OutlineInputBorder(),
+              suffixIcon: _search.text.isEmpty
+                  ? null
+                  : IconButton(
+                      onPressed: () => _setSearch(''),
+                      tooltip: '検索をクリア',
+                      icon: const Icon(Icons.clear),
                     ),
-                    child: const Text('プレビュー'),
+            ),
+          ),
+        ),
+        Expanded(
+          child: FutureBuilder<List<ArticleDraft>>(
+            future: _drafts,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState != ConnectionState.done) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (snapshot.hasError) {
+                return Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('記事を読み込めませんでした。'),
+                      TextButton(
+                        onPressed: _reload,
+                        child: const Text('再読み込み'),
+                      ),
+                    ],
                   ),
-                  PopupMenuItem(
-                    onTap: () => _moveToTrash(draft),
-                    child: const Text('ゴミ箱に移動'),
-                  ),
-                ],
-              ),
-              onTap: () => _openEditor(draft),
-            );
-          },
-        );
-      },
+                );
+              }
+              final drafts = _filterDrafts(snapshot.requireData);
+              if (drafts.isEmpty) {
+                final message = _search.text.trim().isEmpty
+                    ? '記事はまだありません'
+                    : '条件に一致する記事はありません';
+                return Center(child: Text(message));
+              }
+              return ListView.separated(
+                padding: const EdgeInsets.only(bottom: 88),
+                itemCount: drafts.length,
+                separatorBuilder: (_, _) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final draft = drafts[index];
+                  return ListTile(
+                    leading: const Icon(Icons.article_outlined),
+                    title: Text(draft.title),
+                    subtitle: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(draft.articleType),
+                        if (draft.tags.isNotEmpty)
+                          Wrap(
+                            spacing: 8,
+                            children: [
+                              for (final tag in draft.tags)
+                                ActionChip(
+                                  label: Text(tag),
+                                  onPressed: () {
+                                    FocusManager.instance.primaryFocus
+                                        ?.unfocus();
+                                    _setSearch(tag);
+                                  },
+                                ),
+                            ],
+                          ),
+                      ],
+                    ),
+                    trailing: PopupMenuButton<void>(
+                      tooltip: '記事の操作',
+                      itemBuilder: (_) => [
+                        PopupMenuItem(
+                          onTap: () => Navigator.of(context).push<void>(
+                            MaterialPageRoute(
+                              builder: (context) =>
+                                  ArticlePreviewPage(draft: draft),
+                            ),
+                          ),
+                          child: const Text('プレビュー'),
+                        ),
+                        PopupMenuItem(
+                          onTap: () => _moveToTrash(draft),
+                          child: const Text('ゴミ箱に移動'),
+                        ),
+                      ],
+                    ),
+                    onTap: () => _openEditor(draft),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     ),
   );
 }
@@ -270,19 +357,33 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     for (final question in widget.draft.questions)
       question: TextEditingController(text: widget.draft.answers[question]),
   };
+  late final _tags = List<String>.of(widget.draft.tags);
+  final _tagInput = TextEditingController();
+
   bool _saving = false;
 
   @override
   void dispose() {
     _title.dispose();
+    _tagInput.dispose();
     for (final controller in _answers.values) {
       controller.dispose();
     }
     super.dispose();
   }
 
+  void _addTag() {
+    final tag = _tagInput.text.trim();
+    if (tag.isEmpty) return;
+    setState(() {
+      if (!_tags.contains(tag)) _tags.add(tag);
+      _tagInput.clear();
+    });
+  }
+
   ArticleDraft _currentDraft() {
     final original = widget.draft;
+    final pendingTag = _tagInput.text.trim();
     return ArticleDraft(
       id: original.id,
       title: _title.text.trim(),
@@ -292,7 +393,10 @@ class _ArticleEditorState extends State<_ArticleEditor> {
         ...original.answers,
         for (final entry in _answers.entries) entry.key: entry.value.text,
       },
-      tags: original.tags,
+      tags: [
+        ..._tags,
+        if (pendingTag.isNotEmpty && !_tags.contains(pendingTag)) pendingTag,
+      ],
       updatedAt: DateTime.now(),
       status: original.status,
       deletedAt: original.deletedAt,
@@ -335,6 +439,10 @@ class _ArticleEditorState extends State<_ArticleEditor> {
             icon: const Icon(Icons.visibility_outlined),
             tooltip: 'プレビュー',
           ),
+          TextButton(
+            onPressed: _saving ? null : _save,
+            child: Text(_saving ? '保存中…' : '保存'),
+          ),
         ],
       ),
       body: SafeArea(
@@ -355,6 +463,43 @@ class _ArticleEditorState extends State<_ArticleEditor> {
                 validator: (value) =>
                     (value ?? '').trim().isEmpty ? 'タイトルを入力してください' : null,
               ),
+              const SizedBox(height: 16),
+              if (_tags.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final (index, tag) in _tags.indexed)
+                      InputChip(
+                        label: Text(tag),
+                        deleteButtonTooltipMessage: '$tag のタグを削除',
+                        onDeleted: _saving
+                            ? null
+                            : () {
+                                setState(() {
+                                  _tags.removeAt(index);
+                                });
+                              },
+                      ),
+                  ],
+                ),
+              TextField(
+                controller: _tagInput,
+                enabled: !_saving,
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addTag(),
+                decoration: InputDecoration(
+                  labelText: 'タグを追加',
+                  border: const OutlineInputBorder(),
+                  suffixIcon: Tooltip(
+                    message: 'タグを追加',
+                    child: TextButton(
+                      onPressed: _saving ? null : _addTag,
+                      child: const Text('追加'),
+                    ),
+                  ),
+                ),
+              ),
+
               for (final entry in _answers.entries) ...[
                 const SizedBox(height: 16),
                 TextFormField(
@@ -369,11 +514,6 @@ class _ArticleEditorState extends State<_ArticleEditor> {
                   ),
                 ),
               ],
-              const SizedBox(height: 24),
-              FilledButton(
-                onPressed: _saving ? null : _save,
-                child: Text(_saving ? '保存中…' : '保存'),
-              ),
             ],
           ),
         ),
