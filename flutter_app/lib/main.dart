@@ -298,182 +298,286 @@ class _ArticleListState extends State<_ArticleList> {
     if (mounted && saved == true) _reload();
   }
 
-  Widget _buildDraftList(List<ArticleDraft> drafts) {
+  Widget _buildDraftList(List<ArticleDraft> drafts, {required bool wide}) {
     return ListView.separated(
-      padding: const EdgeInsets.only(bottom: 88),
+      padding: EdgeInsets.only(bottom: wide ? 28 : 88),
       itemCount: drafts.length,
-      separatorBuilder: (_, _) => const Divider(height: 1),
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
       itemBuilder: (context, index) {
         final draft = drafts[index];
-        return ListTile(
-          leading: const Icon(Icons.article_outlined),
-          title: Text(draft.title),
-          subtitle: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(draft.articleType),
-              if (draft.tags.isNotEmpty)
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final tag in draft.tags)
-                      ActionChip(
-                        label: Text(tag),
-                        onPressed: () {
-                          FocusManager.instance.primaryFocus?.unfocus();
-                          _setSearch(tag);
-                        },
-                      ),
-                  ],
-                ),
-            ],
+        final theme = Theme.of(context);
+        final colors = theme.colorScheme;
+        return Card(
+          color: colors.surface,
+          elevation: 0,
+          margin: EdgeInsets.zero,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: BorderSide(color: colors.outlineVariant),
           ),
-          trailing: PopupMenuButton<void>(
-            tooltip: '記事の操作',
-            itemBuilder: (_) => [
-              PopupMenuItem(
-                onTap: () => Navigator.of(context).push<void>(
-                  MaterialPageRoute(
-                    builder: (context) => ArticlePreviewPage(draft: draft),
+          clipBehavior: Clip.antiAlias,
+          child: ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: 16,
+              vertical: 6,
+            ),
+            leading: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                color: colors.primaryContainer,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(
+                Icons.article_outlined,
+                color: colors.onPrimaryContainer,
+              ),
+            ),
+            title: Text(draft.title, style: theme.textTheme.titleMedium),
+            subtitle: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(draft.articleType),
+                if (draft.tags.isNotEmpty)
+                  Wrap(
+                    spacing: 8,
+                    children: [
+                      for (final tag in draft.tags)
+                        ActionChip(
+                          label: Text(tag),
+                          onPressed: () {
+                            FocusManager.instance.primaryFocus?.unfocus();
+                            _setSearch(tag);
+                          },
+                        ),
+                    ],
                   ),
+              ],
+            ),
+            trailing: PopupMenuButton<void>(
+              tooltip: '記事の操作',
+              itemBuilder: (_) => [
+                PopupMenuItem(
+                  onTap: () => Navigator.of(context).push<void>(
+                    MaterialPageRoute(
+                      builder: (context) => ArticlePreviewPage(draft: draft),
+                    ),
+                  ),
+                  child: const Text('プレビュー'),
                 ),
-                child: const Text('プレビュー'),
-              ),
-              PopupMenuItem(
-                onTap: () => _duplicateDraft(draft),
-                child: const Text('複製'),
-              ),
+                PopupMenuItem(
+                  onTap: () => _duplicateDraft(draft),
+                  child: const Text('複製'),
+                ),
 
-              PopupMenuItem(
-                onTap: () => _moveToTrash(draft),
-                child: const Text('ゴミ箱に移動'),
-              ),
-            ],
+                PopupMenuItem(
+                  onTap: () => _moveToTrash(draft),
+                  child: const Text('ゴミ箱に移動'),
+                ),
+              ],
+            ),
+            onTap: () => _openEditor(draft),
           ),
-          onTap: () => _openEditor(draft),
         );
       },
     );
   }
 
-  @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('記事設計'),
-      actions: [
-        IconButton(
-          onPressed: _openTemplates,
-          tooltip: 'テンプレート管理',
-          icon: const Icon(Icons.dashboard_customize_outlined),
-        ),
-
-        IconButton(
-          onPressed: _openBackup,
-          tooltip: 'バックアップ',
-          icon: const Icon(Icons.backup_outlined),
-        ),
-
-        IconButton(
-          onPressed: _openTrash,
-          tooltip: 'ゴミ箱',
-          icon: const Icon(Icons.delete_outline),
-        ),
-      ],
-    ),
-    floatingActionButton: FloatingActionButton.extended(
-      onPressed: _newArticle,
-      icon: const Icon(Icons.add),
-      label: const Text('新しい記事'),
-    ),
-    body: Column(
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-          child: TextField(
-            controller: _search,
-            onChanged: (_) => setState(() {}),
-            textInputAction: TextInputAction.search,
-            decoration: InputDecoration(
-              labelText: '記事を検索',
-              prefixIcon: const Icon(Icons.search),
-              border: const OutlineInputBorder(),
-              suffixIcon: _search.text.isEmpty
-                  ? null
-                  : IconButton(
-                      onPressed: () => _setSearch(''),
-                      tooltip: '検索をクリア',
-                      icon: const Icon(Icons.clear),
+  Widget _buildResults({required bool wide}) =>
+      FutureBuilder<List<ArticleDraft>>(
+        future: _drafts,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          if (snapshot.hasError) {
+            return Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('記事を読み込めませんでした。'),
+                  TextButton(onPressed: _reload, child: const Text('再読み込み')),
+                ],
+              ),
+            );
+          }
+          final drafts = _sortedDrafts(_filterDrafts(snapshot.requireData));
+          final searching = _search.text.trim().isNotEmpty;
+          return Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '${searching ? '検索結果' : '記事数'}：${drafts.length}件',
+                      ),
                     ),
+                    PopupMenuButton<_DraftSortOrder>(
+                      tooltip: '並べ替え',
+                      icon: const Icon(Icons.sort),
+                      enabled: !_writingSortOrder,
+                      onSelected: _selectSortOrder,
+                      itemBuilder: (_) => [
+                        for (final order in _DraftSortOrder.values)
+                          CheckedPopupMenuItem(
+                            value: order,
+                            checked: _sortOrder == order,
+                            child: Text(order.label),
+                          ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: drafts.isEmpty
+                    ? Center(
+                        child: Text(
+                          searching ? '条件に一致する記事はありません' : '記事はまだありません',
+                        ),
+                      )
+                    : _buildDraftList(drafts, wide: wide),
+              ),
+            ],
+          );
+        },
+      );
+
+  Widget _toolbarAction({
+    required bool wide,
+    required String label,
+    required IconData icon,
+    required VoidCallback onPressed,
+  }) {
+    if (wide) {
+      return TextButton.icon(
+        onPressed: onPressed,
+        icon: Icon(icon),
+        label: Text(label),
+      );
+    }
+    return IconButton(onPressed: onPressed, tooltip: label, icon: Icon(icon));
+  }
+
+  @override
+  Widget build(BuildContext context) => LayoutBuilder(
+    builder: (context, constraints) {
+      final width = constraints.maxWidth;
+      final wide = width >= 840;
+      final outerInset = wide && width > 960 ? (width - 960) / 2 : 0.0;
+      final theme = Theme.of(context);
+      final colors = theme.colorScheme;
+
+      return Scaffold(
+        backgroundColor: colors.surfaceContainerLow,
+        appBar: AppBar(
+          backgroundColor: colors.surface,
+          surfaceTintColor: Colors.transparent,
+          shape: Border(bottom: BorderSide(color: colors.outlineVariant)),
+          titleSpacing: outerInset + (wide ? 24 : 16),
+          actionsPadding: EdgeInsets.only(right: outerInset + (wide ? 16 : 4)),
+          title: const Text('記事設計'),
+          actions: [
+            _toolbarAction(
+              wide: wide,
+              label: 'テンプレート管理',
+              icon: Icons.dashboard_customize_outlined,
+              onPressed: _openTemplates,
+            ),
+            _toolbarAction(
+              wide: wide,
+              label: 'バックアップ',
+              icon: Icons.backup_outlined,
+              onPressed: _openBackup,
+            ),
+            _toolbarAction(
+              wide: wide,
+              label: 'ゴミ箱',
+              icon: Icons.delete_outline,
+              onPressed: _openTrash,
+            ),
+          ],
+        ),
+        floatingActionButton: wide
+            ? null
+            : FloatingActionButton.extended(
+                onPressed: _newArticle,
+                icon: const Icon(Icons.add),
+                label: const Text('新しい記事'),
+              ),
+        body: SafeArea(
+          bottom: false,
+          child: Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 960),
+              child: Padding(
+                padding: EdgeInsets.fromLTRB(
+                  wide ? 24 : 16,
+                  wide ? 28 : 12,
+                  wide ? 24 : 16,
+                  0,
+                ),
+                child: Column(
+                  children: [
+                    if (wide) ...[
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              '記事一覧',
+                              style: theme.textTheme.headlineMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ),
+                          FilledButton.icon(
+                            onPressed: _newArticle,
+                            icon: const Icon(Icons.add),
+                            label: const Text('新しい記事'),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 20),
+                    ],
+                    TextField(
+                      controller: _search,
+                      onChanged: (_) => setState(() {}),
+                      textInputAction: TextInputAction.search,
+                      decoration: InputDecoration(
+                        labelText: '記事を検索',
+                        prefixIcon: const Icon(Icons.search),
+                        filled: true,
+                        fillColor: colors.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: colors.outlineVariant),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: colors.outlineVariant),
+                        ),
+                        suffixIcon: _search.text.isEmpty
+                            ? null
+                            : IconButton(
+                                onPressed: () => _setSearch(''),
+                                tooltip: '検索をクリア',
+                                icon: const Icon(Icons.clear),
+                              ),
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Expanded(child: _buildResults(wide: wide)),
+                  ],
+                ),
+              ),
             ),
           ),
         ),
-        Expanded(
-          child: FutureBuilder<List<ArticleDraft>>(
-            future: _drafts,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
-              if (snapshot.hasError) {
-                return Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text('記事を読み込めませんでした。'),
-                      TextButton(
-                        onPressed: _reload,
-                        child: const Text('再読み込み'),
-                      ),
-                    ],
-                  ),
-                );
-              }
-              final drafts = _sortedDrafts(_filterDrafts(snapshot.requireData));
-              final searching = _search.text.trim().isNotEmpty;
-              return Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            '${searching ? '検索結果' : '記事数'}：${drafts.length}件',
-                          ),
-                        ),
-                        PopupMenuButton<_DraftSortOrder>(
-                          tooltip: '並べ替え',
-                          icon: const Icon(Icons.sort),
-                          enabled: !_writingSortOrder,
-                          onSelected: _selectSortOrder,
-                          itemBuilder: (_) => [
-                            for (final order in _DraftSortOrder.values)
-                              CheckedPopupMenuItem(
-                                value: order,
-                                checked: _sortOrder == order,
-                                child: Text(order.label),
-                              ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: drafts.isEmpty
-                        ? Center(
-                            child: Text(
-                              searching ? '条件に一致する記事はありません' : '記事はまだありません',
-                            ),
-                          )
-                        : _buildDraftList(drafts),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ],
-    ),
+      );
+    },
   );
 }
 

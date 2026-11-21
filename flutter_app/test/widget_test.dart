@@ -496,4 +496,36 @@ void main() {
       expect(templateCopy.iconName, 'person.text.rectangle');
     },
   );
+
+  testWidgets('keeps the desktop list centered and preserves compact actions', (
+    tester,
+  ) async {
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.runAsync(() => database.listDrafts(DraftStatus.active));
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+
+    final search = find.widgetWithText(TextField, '記事を検索');
+    expect(find.text('記事一覧'), findsOneWidget);
+    expect(tester.getCenter(search).dx, closeTo(720, 1));
+    expect(tester.getSize(search).width, lessThan(960));
+    expect(
+      find.ancestor(
+        of: find.text('新しい記事'),
+        matching: find.byWidgetPredicate((widget) => widget is FilledButton),
+      ),
+      findsOneWidget,
+    );
+    expect(find.text('テンプレート管理'), findsOneWidget);
+
+    await tester.binding.setSurfaceSize(const Size(390, 844));
+    await tester.pumpAndSettle();
+    expect(tester.getSize(search).width, lessThan(390));
+    expect(find.byType(FloatingActionButton), findsOneWidget);
+    expect(find.byTooltip('テンプレート管理'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 }
