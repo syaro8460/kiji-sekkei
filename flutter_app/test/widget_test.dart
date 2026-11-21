@@ -420,4 +420,80 @@ void main() {
       expect(draft.answers, {'新しい質問': '', '名前を変えた質問': '編集した回答', '互換用': '保持する'});
     },
   );
+
+  testWidgets(
+    'duplicates articles and templates without changing the original',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(700, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = ArticleDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      const originalId = '17c1f880-f91d-4803-bcb0-8ebdbd2f2011';
+      const templateId = '17c1f880-f91d-4803-bcb0-8ebdbd2f2012';
+      await tester.runAsync(() async {
+        await database.saveDraft(
+          ArticleDraft(
+            id: originalId,
+            title: '元の記事',
+            articleType: '取材',
+            questions: ['質問'],
+            answers: {'質問': '元の回答'},
+            tags: ['取材記録'],
+            updatedAt: DateTime.utc(2026, 1, 1),
+          ),
+        );
+        await database.saveCustomTemplate(
+          ArticleTemplate(
+            id: templateId,
+            name: '取材',
+            questions: ['質問'],
+            iconName: 'person.text.rectangle',
+          ),
+        );
+      });
+      await tester.pumpWidget(MyApp(database: database));
+      await tester.pumpAndSettle();
+
+      Future<void> tap(Finder finder) async {
+        await tester.tap(finder);
+        await tester.pumpAndSettle();
+      }
+
+      await tap(find.byTooltip('記事の操作'));
+      await tap(find.text('複製'));
+      expect(find.text('記事を編集'), findsOneWidget);
+      expect(find.text('元の記事（コピー）'), findsOneWidget);
+      expect(find.text('元の回答'), findsOneWidget);
+      expect(find.widgetWithText(InputChip, '取材記録'), findsOneWidget);
+      await tester.enterText(
+        find.widgetWithText(TextFormField, '質問'),
+        'コピーの回答',
+      );
+      await tap(find.widgetWithText(TextButton, '保存'));
+
+      final drafts = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      final original = drafts!.singleWhere((draft) => draft.id == originalId);
+      final copy = drafts.singleWhere((draft) => draft.id != originalId);
+      expect(original.answers, {'質問': '元の回答'});
+      expect(copy.answers, {'質問': 'コピーの回答'});
+      expect(copy.questions, original.questions);
+      expect(copy.tags, original.tags);
+      expect(copy.articleType, original.articleType);
+
+      await tap(find.byTooltip('テンプレート管理'));
+      await tap(find.byTooltip('取材の操作'));
+      await tap(find.text('複製'));
+      expect(find.text('取材'), findsOneWidget);
+      expect(find.text('取材 コピー'), findsOneWidget);
+
+      final templates = await tester.runAsync(database.listCustomTemplates);
+      expect(templates!.first.id, templateId);
+      final templateCopy = templates.last;
+      expect(templateCopy.id, isNot(templateId));
+      expect(templateCopy.questions, ['質問']);
+      expect(templateCopy.iconName, 'person.text.rectangle');
+    },
+  );
 }

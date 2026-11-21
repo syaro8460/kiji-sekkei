@@ -4,7 +4,7 @@ import '../models/article_template.dart';
 import '../models/json_compat.dart';
 import '../storage/article_database.dart';
 
-enum _TemplateAction { edit, up, down, delete }
+enum _TemplateAction { edit, duplicate, up, down, delete }
 
 class TemplatePage extends StatefulWidget {
   const TemplatePage({super.key, required this.database});
@@ -57,6 +57,20 @@ class _TemplatePageState extends State<TemplatePage> {
     );
   }
 
+  Future<void> _duplicate(ArticleTemplate original) {
+    return _saveChanges(
+      () => widget.database.saveCustomTemplate(
+        ArticleTemplate(
+          id: newUuid(),
+          name: '${original.name} コピー',
+          questions: List.of(original.questions),
+          iconName: original.iconName,
+        ),
+      ),
+      failureMessage: 'テンプレートを複製できませんでした。',
+    );
+  }
+
   Future<void> _delete(ArticleTemplate template) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -98,6 +112,8 @@ class _TemplatePageState extends State<TemplatePage> {
     switch (action) {
       case _TemplateAction.edit:
         _edit(templates[index]);
+      case _TemplateAction.duplicate:
+        _duplicate(templates[index]);
       case _TemplateAction.up:
         _move(templates, index, index - 1);
       case _TemplateAction.down:
@@ -159,6 +175,11 @@ class _TemplatePageState extends State<TemplatePage> {
                       value: _TemplateAction.edit,
                       child: Text('編集'),
                     ),
+                    const PopupMenuItem(
+                      value: _TemplateAction.duplicate,
+                      child: Text('複製'),
+                    ),
+
                     if (index > 0)
                       const PopupMenuItem(
                         value: _TemplateAction.up,

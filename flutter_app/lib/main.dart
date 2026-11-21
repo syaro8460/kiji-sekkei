@@ -73,6 +73,7 @@ class _ArticleListState extends State<_ArticleList> {
   _DraftSortOrder _sortOrder = _DraftSortOrder.updatedNewest;
   late final _preferences = SharedPreferences.getInstance();
   bool _writingSortOrder = false;
+  bool _duplicating = false;
 
   @override
   void initState() {
@@ -199,6 +200,35 @@ class _ArticleListState extends State<_ArticleList> {
     if (mounted) _reload();
   }
 
+  Future<void> _duplicateDraft(ArticleDraft original) async {
+    if (_duplicating) return;
+    _duplicating = true;
+    final copy = ArticleDraft(
+      id: newUuid(),
+      title: '${original.title}（コピー）',
+      articleType: original.articleType,
+      questions: List.of(original.questions),
+      answers: Map.of(original.answers),
+      tags: List.of(original.tags),
+    );
+    try {
+      await widget.database.saveDraft(copy);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('記事を複製できませんでした。')));
+      }
+      return;
+    } finally {
+      _duplicating = false;
+    }
+    if (!mounted) return;
+    _reload();
+    if (ModalRoute.of(context)?.isCurrent == true) {
+      await _openEditor(copy);
+    }
+  }
+
   Future<void> _moveToTrash(ArticleDraft draft) async {
     try {
       await widget.database.moveToTrash(draft.id);
@@ -309,6 +339,11 @@ class _ArticleListState extends State<_ArticleList> {
                 ),
                 child: const Text('プレビュー'),
               ),
+              PopupMenuItem(
+                onTap: () => _duplicateDraft(draft),
+                child: const Text('複製'),
+              ),
+
               PopupMenuItem(
                 onTap: () => _moveToTrash(draft),
                 child: const Text('ゴミ箱に移動'),
