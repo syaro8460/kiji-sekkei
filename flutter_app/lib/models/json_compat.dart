@@ -1,3 +1,5 @@
+import 'dart:math';
+
 final _uuidPattern = RegExp(
   r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$',
 );
@@ -30,4 +32,22 @@ String encodeIso8601Date(DateTime value) {
   final second = utc.second.toString().padLeft(2, '0');
 
   return '$year-$month-${day}T$hour:$minute:${second}Z';
+}
+
+String newUuid() {
+  final random = Random.secure();
+  final bytes = List.generate(16, (_) => random.nextInt(256));
+  // Set the version and variant bits for an RFC UUID v4.
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  final hex = bytes
+      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
+      .join();
+  return [
+    hex.substring(0, 8),
+    hex.substring(8, 12),
+    hex.substring(12, 16),
+    hex.substring(16, 20),
+    hex.substring(20),
+  ].join('-');
 }

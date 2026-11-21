@@ -1,11 +1,12 @@
 import 'dart:async';
-import 'dart:math';
 
 import 'package:material_ui/material_ui.dart';
 
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
+import 'models/json_compat.dart';
 import 'screens/backup_page.dart';
+import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
 
@@ -33,6 +34,9 @@ class _MyAppState extends State<MyApp> {
   @override
   Widget build(BuildContext context) => MaterialApp(
     title: '記事設計',
+    locale: const Locale('ja', 'JP'),
+    supportedLocales: const [Locale('ja', 'JP')],
+    localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: ThemeData(colorSchemeSeed: const Color(0xFF365C51)),
     home: _ArticleList(database: _database),
   );
@@ -57,6 +61,14 @@ class _ArticleListState extends State<_ArticleList> {
     setState(() {
       _drafts = _loadDrafts();
     });
+  }
+
+  void _openTemplates() {
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => TemplatePage(database: widget.database),
+      ),
+    );
   }
 
   Future<void> _openBackup() async {
@@ -127,7 +139,7 @@ class _ArticleListState extends State<_ArticleList> {
     if (!mounted || template == null) return;
     await _openEditor(
       ArticleDraft(
-        id: _newDraftId(),
+        id: newUuid(),
         title: '',
         articleType: template.name,
         questions: List.of(template.questions),
@@ -154,6 +166,12 @@ class _ArticleListState extends State<_ArticleList> {
     appBar: AppBar(
       title: const Text('記事設計'),
       actions: [
+        IconButton(
+          onPressed: _openTemplates,
+          tooltip: 'テンプレート管理',
+          icon: const Icon(Icons.dashboard_customize_outlined),
+        ),
+
         IconButton(
           onPressed: _openBackup,
           tooltip: 'バックアップ',
@@ -334,22 +352,4 @@ class _ArticleEditorState extends State<_ArticleEditor> {
       ),
     ),
   );
-}
-
-String _newDraftId() {
-  final random = Random.secure();
-  final bytes = List.generate(16, (_) => random.nextInt(256));
-  // Set the version and variant bits for an RFC UUID v4.
-  bytes[6] = (bytes[6] & 0x0f) | 0x40;
-  bytes[8] = (bytes[8] & 0x3f) | 0x80;
-  final hex = bytes
-      .map((byte) => byte.toRadixString(16).padLeft(2, '0'))
-      .join();
-  return [
-    hex.substring(0, 8),
-    hex.substring(8, 12),
-    hex.substring(12, 16),
-    hex.substring(16, 20),
-    hex.substring(20),
-  ].join('-');
 }

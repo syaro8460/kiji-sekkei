@@ -19,6 +19,9 @@ void main() {
     await tester.pumpWidget(MyApp(database: database));
     await tester.pumpAndSettle();
     expect(find.text('記事はまだありません'), findsOneWidget);
+    final listContext = tester.element(find.text('記事設計'));
+    expect(Localizations.localeOf(listContext), const Locale('ja', 'JP'));
+    expect(MaterialLocalizations.of(listContext).backButtonTooltip, '戻る');
 
     await tester.tap(find.text('新しい記事'));
     await tester.pumpAndSettle();
@@ -94,8 +97,7 @@ void main() {
     await tap(find.byTooltip('ゴミ箱の記事の操作'));
     await tap(find.text('復元'));
     expect(find.text('ゴミ箱は空です'), findsOneWidget);
-    await tester.pageBack();
-    await tester.pumpAndSettle();
+    await tap(find.byTooltip('戻る'));
     expect(find.text('保存した記事'), findsOneWidget);
 
     await moveToTrash();
@@ -111,5 +113,66 @@ void main() {
 
     final backup = await tester.runAsync(database.exportBackup);
     expect(BackupManager().decode(backup!).drafts, isEmpty);
+  });
+
+  testWidgets('manages custom templates and creates an article from one', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await tester.runAsync(() => database.listCustomTemplates());
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+
+    Future<void> tap(Finder finder) async {
+      await tester.tap(finder);
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> fill(String name, String questions) async {
+      await tester.enterText(find.byType(TextFormField).first, name);
+      await tester.enterText(find.byType(TextFormField).last, questions);
+      await tap(find.text('保存'));
+    }
+
+    await tap(find.byTooltip('テンプレート管理'));
+    expect(find.text('カスタムテンプレートはまだありません'), findsOneWidget);
+    await tap(find.text('新しいテンプレート'));
+    await fill('インタビュー', '目的\n相手');
+    await tap(find.text('新しいテンプレート'));
+    await fill('ふりかえり', '気づき');
+    await tap(find.byTooltip('ふりかえりの操作'));
+    await tap(find.text('上に移動'));
+    expect(
+      tester.getTopLeft(find.text('ふりかえり')).dy,
+      lessThan(tester.getTopLeft(find.text('インタビュー')).dy),
+    );
+
+    await tap(find.text('ふりかえり'));
+    await fill('週次レビュー', '気づき\n次にやること');
+    await tap(find.byTooltip('戻る'));
+    await tap(find.text('新しい記事'));
+    await tap(find.text('週次レビュー'));
+    expect(find.text('次にやること'), findsOneWidget);
+    await tester.enterText(find.byType(TextFormField).first, '今週の記事');
+    final save = find.widgetWithText(FilledButton, '保存');
+    await tester.ensureVisible(save);
+    await tap(save);
+
+    await tap(find.byTooltip('テンプレート管理'));
+    await tap(find.byTooltip('週次レビューの操作'));
+    await tap(find.text('削除'));
+    await tap(find.text('キャンセル'));
+    expect(find.text('週次レビュー'), findsOneWidget);
+    await tap(find.byTooltip('週次レビューの操作'));
+    await tap(find.text('削除'));
+    await tap(find.text('削除'));
+    expect(find.text('週次レビュー'), findsNothing);
+    await tap(find.byTooltip('戻る'));
+
+    await tap(find.text('今週の記事'));
+    expect(find.text('次にやること'), findsOneWidget);
   });
 }
