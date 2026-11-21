@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
 import '../storage/article_database.dart';
@@ -44,7 +45,7 @@ class _BackupPageState extends State<BackupPage> {
         'kiji-sekkei-$day.json',
         Uint8List.fromList(bytes),
       )) {
-        _notify('バックアップを書き出しました。');
+        _notify(kIsWeb ? 'バックアップのダウンロードを開始しました。' : 'バックアップを書き出しました。');
       }
     } catch (_) {
       _notify('バックアップを書き出せませんでした。');
@@ -140,5 +141,6 @@ Future<bool> _saveBackup(String filename, Uint8List bytes) async {
     mimeType: 'application/json',
     bytes: bytes,
   );
-  return saved != null;
+  // The web picker starts a download and returns no file URI.
+  return kIsWeb || saved != null;
 }

@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
 import '../models/article_draft.dart';
@@ -41,8 +42,11 @@ class _ArticlePreviewPageState extends State<ArticlePreviewPage> {
         utf8.encode(exportMarkdown(draft)),
       );
       if (!mounted || !saved) return;
-      ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('記事をファイルに保存しました。')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(kIsWeb ? '記事ファイルのダウンロードを開始しました。' : '記事をファイルに保存しました。'),
+        ),
+      );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
@@ -113,5 +117,6 @@ Future<bool> _saveMarkdown(String filename, Uint8List bytes) async {
     mimeType: 'text/markdown',
     bytes: bytes,
   );
-  return saved != null;
+  // The web picker starts a download and returns no file URI.
+  return kIsWeb || saved != null;
 }
