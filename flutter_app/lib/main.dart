@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
+import 'screens/backup_page.dart';
 import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
 
@@ -56,6 +57,18 @@ class _ArticleListState extends State<_ArticleList> {
     setState(() {
       _drafts = _loadDrafts();
     });
+  }
+
+  Future<void> _openBackup() async {
+    final restored = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (context) => BackupPage(database: widget.database),
+      ),
+    );
+    if (!mounted || restored != true) return;
+    _reload();
+    ScaffoldMessenger.of(context)
+        .showSnackBar(const SnackBar(content: Text('バックアップを復元しました。')));
   }
 
   Future<void> _openTrash() async {
@@ -141,6 +154,12 @@ class _ArticleListState extends State<_ArticleList> {
     appBar: AppBar(
       title: const Text('記事設計'),
       actions: [
+        IconButton(
+          onPressed: _openBackup,
+          tooltip: 'バックアップ',
+          icon: const Icon(Icons.backup_outlined),
+        ),
+
         IconButton(
           onPressed: _openTrash,
           tooltip: 'ゴミ箱',
