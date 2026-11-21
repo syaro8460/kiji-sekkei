@@ -7,6 +7,7 @@ import 'models/article_draft.dart';
 import 'models/article_template.dart';
 import 'models/json_compat.dart';
 import 'screens/article_preview_page.dart';
+import 'screens/article_questions_page.dart';
 import 'screens/backup_page.dart';
 import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
@@ -459,10 +460,14 @@ class _ArticleEditor extends StatefulWidget {
 class _ArticleEditorState extends State<_ArticleEditor> {
   final _form = GlobalKey<FormState>();
   late final _title = TextEditingController(text: widget.draft.title);
-  late final _answers = {
-    for (final question in widget.draft.questions)
+  late List<String> _questions = List.of(widget.draft.questions);
+  late Map<String, TextEditingController> _answers = {
+    for (final question in _questions.toSet())
       question: TextEditingController(text: widget.draft.answers[question]),
   };
+  late final _extraAnswers = Map<String, String>.of(widget.draft.answers)
+    ..removeWhere((question, _) => widget.draft.questions.contains(question));
+
   late final _tags = List<String>.of(widget.draft.tags);
   final _tagInput = TextEditingController();
 
@@ -487,6 +492,41 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     });
   }
 
+  Future<void> _editQuestions() async {
+    final edited = await Navigator.of(context).push<List<ArticleQuestion>>(
+      MaterialPageRoute(
+        builder: (context) => ArticleQuestionsPage(
+          questions: [
+            for (final question in _questions)
+              (text: question, answer: _answers[question]!.text),
+          ],
+        ),
+      ),
+    );
+    if (!mounted || edited == null) return;
+
+    final previousControllers = _answers.values.toList();
+    final nextControllers = <String, TextEditingController>{};
+    for (final question in edited) {
+      nextControllers.putIfAbsent(
+        question.text,
+        () => TextEditingController(text: question.answer),
+      );
+    }
+    setState(() {
+      _questions = edited.map((question) => question.text).toList();
+      _answers = nextControllers;
+      _extraAnswers.removeWhere(
+        (question, _) => _answers.containsKey(question),
+      );
+    });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      for (final controller in previousControllers) {
+        controller.dispose();
+      }
+    });
+  }
+
   ArticleDraft _currentDraft() {
     final original = widget.draft;
     final pendingTag = _tagInput.text.trim();
@@ -494,9 +534,9 @@ class _ArticleEditorState extends State<_ArticleEditor> {
       id: original.id,
       title: _title.text.trim(),
       articleType: original.articleType,
-      questions: original.questions,
+      questions: List.of(_questions),
       answers: {
-        ...original.answers,
+        ..._extraAnswers,
         for (final entry in _answers.entries) entry.key: entry.value.text,
       },
       tags: [
@@ -606,9 +646,20 @@ class _ArticleEditorState extends State<_ArticleEditor> {
                 ),
               ),
 
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: TextButton.icon(
+                  onPressed: _saving ? null : _editQuestions,
+                  icon: const Icon(Icons.edit_note),
+                  label: const Text('質問を編集'),
+                ),
+              ),
+
               for (final entry in _answers.entries) ...[
                 const SizedBox(height: 16),
                 TextFormField(
+                  key: ValueKey(entry.key),
                   controller: entry.value,
                   enabled: !_saving,
                   minLines: 3,

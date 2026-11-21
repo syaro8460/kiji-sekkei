@@ -335,4 +335,89 @@ void main() {
     await tester.pumpAndSettle();
     expect(appearsBefore(oldTitle, newTitle), isTrue);
   });
+
+  testWidgets(
+    'edits an article question list while preserving renamed answers',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(700, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = ArticleDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      await tester.runAsync(
+        () => database.saveDraft(
+          ArticleDraft(
+            id: '6017fdb4-7019-4228-98c0-55af8167ac20',
+            title: '質問を編集する記事',
+            articleType: '日記',
+            questions: ['元の質問', '削除する質問'],
+            answers: {'元の質問': '保存済みの回答', '削除する質問': '消す回答', '互換用': '保持する'},
+          ),
+        ),
+      );
+      await tester.pumpWidget(MyApp(database: database));
+      await tester.pumpAndSettle();
+
+      Future<void> tap(Finder finder) async {
+        await tester.tap(finder);
+        await tester.pumpAndSettle();
+      }
+
+      await tap(find.text('質問を編集する記事'));
+      await tester.enterText(
+        find.widgetWithText(TextFormField, '元の質問'),
+        '編集した回答',
+      );
+      await tap(find.text('質問を編集'));
+      await tap(find.text('元の質問'));
+      await tester.enterText(find.byType(TextFormField).last, '名前を変えた質問');
+      await tap(find.text('完了'));
+
+      await tap(find.text('質問を追加'));
+      await tester.enterText(find.byType(TextFormField).last, '新しい質問');
+      await tap(find.text('完了'));
+      final handle = find.byTooltip('新しい質問 をドラッグして並べ替え');
+      expect(
+        tester.getCenter(handle).dx,
+        greaterThan(tester.getCenter(find.byTooltip('新しい質問 の操作')).dx),
+      );
+      final target = tester.getCenter(find.text('名前を変えた質問')).dy;
+      await tester.timedDrag(
+        handle,
+        Offset(0, target - tester.getCenter(handle).dy - 12),
+        const Duration(milliseconds: 400),
+      );
+      await tester.pumpAndSettle();
+      expect(
+        tester.getTopLeft(find.text('新しい質問')).dy,
+        lessThan(tester.getTopLeft(find.text('名前を変えた質問')).dy),
+      );
+
+      await tap(find.byTooltip('新しい質問 の操作'));
+      expect(find.text('上に移動'), findsNothing);
+      expect(find.text('下に移動'), findsNothing);
+      await tester.binding.handlePopRoute();
+      await tester.pumpAndSettle();
+      await tap(find.byTooltip('削除する質問 の操作'));
+      await tap(find.text('削除'));
+      await tap(find.text('キャンセル'));
+      expect(find.text('削除する質問'), findsOneWidget);
+      await tap(find.byTooltip('削除する質問 の操作'));
+      await tap(find.text('削除'));
+      await tap(find.text('削除'));
+      await tap(find.text('反映'));
+      expect(find.text('編集した回答'), findsOneWidget);
+      final draftsBeforeSave = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      expect(draftsBeforeSave!.single.questions, ['元の質問', '削除する質問']);
+      await tap(find.widgetWithText(TextButton, '保存'));
+
+      final drafts = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      final draft = drafts!.single;
+      expect(draft.questions, ['新しい質問', '名前を変えた質問']);
+      expect(draft.answers, {'新しい質問': '', '名前を変えた質問': '編集した回答', '互換用': '保持する'});
+    },
+  );
 }
