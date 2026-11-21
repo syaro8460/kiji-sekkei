@@ -114,13 +114,16 @@ enum DataMigrationManager {
             from: sourceData
         )
 
-        if migrationCompleted {
-            try verifySavedArticles(
-                drafts: sourceDrafts,
-                container: container
-            )
+        let sourceIDs = sourceDrafts.map(\.id)
 
-            print("移行済みの記事データを確認しました")
+        guard Set(sourceIDs).count == sourceIDs.count else {
+            throw MigrationError.articleMismatch
+        }
+
+        print("移行元の記事件数: \(sourceDrafts.count)")
+
+        if migrationCompleted {
+            print("移行済みのため、記事の再コピーをスキップします")
             return
         }
 
@@ -160,6 +163,10 @@ enum DataMigrationManager {
         let storedArticles = try verificationContext.fetch(
             FetchDescriptor<StoredArticle>()
         )
+        
+        guard storedArticles.count == drafts.count else {
+            throw MigrationError.articleMismatch
+        }
 
         let storedByID = Dictionary(
             uniqueKeysWithValues: storedArticles.map {

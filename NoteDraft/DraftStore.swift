@@ -39,10 +39,35 @@ final class DraftStore: ObservableObject {
         return drafts != lastSavedDrafts
     }
 
-    func configureSwiftData(
-        container: ModelContainer
-    ) {
+    func configureSwiftData(container: ModelContainer) {
         self.modelContainer = container
+    }
+    
+    func activateSwiftData() throws {
+        guard let modelContainer else {
+            throw SwiftDataActivationError.missingModelContainer
+        }
+
+        try DataMigrationManager.runMigration(
+            container: modelContainer
+        )
+
+        let previousDrafts = drafts
+
+        do {
+            try refreshFromSwiftData()
+            isUsingSwiftData = true
+        } catch {
+            isUsingSwiftData = false
+            isLoadingFromSwiftData = true
+            drafts = previousDrafts
+            isLoadingFromSwiftData = false
+            throw error
+        }
+    }
+
+    private enum SwiftDataActivationError: Error {
+        case missingModelContainer
     }
     
     func clearSwiftDataSaveError() {
@@ -197,15 +222,6 @@ final class DraftStore: ObservableObject {
 
         drafts = loadedDrafts
         lastSavedDrafts = loadedDrafts
-        
-        var hasUnsavedSwiftDataChanges: Bool {
-            guard isUsingSwiftData else {
-                return false
-            }
-
-            return drafts != lastSavedDrafts
-        }
-
     }
 
     init() {

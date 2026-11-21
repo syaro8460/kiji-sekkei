@@ -4,6 +4,14 @@ import SwiftData
 @main
 struct NoteDraftApp: App {
     @State private var isShowingSplash = true
+    
+    private let modelContainer: ModelContainer = {
+        do {
+            return try ModelContainer(for: StoredArticle.self)
+        } catch {
+            fatalError("SwiftDataの初期化に失敗しました: \(error)")
+        }
+    }()
 
     var body: some Scene {
         WindowGroup {
@@ -22,6 +30,7 @@ struct NoteDraftApp: App {
                 value: isShowingSplash
             )
             .task {
+
                 guard isShowingSplash else {
                     return
                 }
@@ -33,6 +42,6 @@ struct NoteDraftApp: App {
                 isShowingSplash = false
             }
         }
-        .modelContainer(for: StoredArticle.self)
+        .modelContainer(modelContainer)
     }
 }

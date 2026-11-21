@@ -1,6 +1,9 @@
 import SwiftUI
+import SwiftData
 
 struct ContentView: View {
+    @Environment(\.modelContext) private var modelContext
+    @State private var hasActivatedSwiftData = false
     @StateObject private var store = DraftStore()
     @StateObject private var templateStore = TemplateStore()
     
@@ -336,6 +339,25 @@ struct ContentView: View {
                 openNewDraftWhenSheetCloses(
                     isShowing: isShowing
                 )
+            }
+            
+            .task {
+                guard !hasActivatedSwiftData else {
+                    return
+                }
+
+                do {
+                    store.configureSwiftData(
+                        container: modelContext.container
+                    )
+
+                    try store.activateSwiftData()
+
+                    hasActivatedSwiftData = true
+                    print("SwiftDataへの切り替え成功")
+                } catch {
+                    print("SwiftDataへの切り替え失敗: \(error)")
+                }
             }
             
             .alert(
