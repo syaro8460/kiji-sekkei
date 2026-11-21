@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
 import 'models/json_compat.dart';
+import 'screens/article_page_frame.dart';
 import 'screens/article_preview_page.dart';
 import 'screens/article_questions_page.dart';
 import 'screens/backup_page.dart';
@@ -713,11 +714,17 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   }
 
   @override
-  Widget build(BuildContext context) => PopScope(
-    canPop: !_saving,
-    child: Scaffold(
-      appBar: AppBar(
-        title: Text(widget.isNew ? '新しい記事' : '記事を編集'),
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final border = OutlineInputBorder(
+      borderRadius: BorderRadius.circular(14),
+      borderSide: BorderSide(color: colors.outlineVariant),
+    );
+    return PopScope(
+      canPop: !_saving,
+      child: ArticlePageFrame(
+        title: widget.isNew ? '新しい記事' : '記事を編集',
         actions: [
           IconButton(
             onPressed: _saving ? null : _preview,
@@ -729,91 +736,105 @@ class _ArticleEditorState extends State<_ArticleEditor> {
             child: Text(_saving ? '保存中…' : '保存'),
           ),
         ],
-      ),
-      body: SafeArea(
-        child: Form(
-          key: _form,
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
-              Text(widget.draft.articleType),
-              const SizedBox(height: 12),
-              TextFormField(
-                controller: _title,
-                enabled: !_saving,
-                decoration: const InputDecoration(
-                  labelText: 'タイトル',
-                  border: OutlineInputBorder(),
+        body: Theme(
+          data: theme.copyWith(
+            inputDecorationTheme: InputDecorationThemeData(
+              filled: true,
+              fillColor: colors.surface,
+              border: border,
+              enabledBorder: border,
+            ),
+          ),
+          child: Form(
+            key: _form,
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+              children: [
+                Text(
+                  widget.draft.articleType,
+                  style: theme.textTheme.labelLarge,
                 ),
-                validator: (value) =>
-                    (value ?? '').trim().isEmpty ? 'タイトルを入力してください' : null,
-              ),
-              const SizedBox(height: 16),
-              if (_tags.isNotEmpty)
-                Wrap(
-                  spacing: 8,
-                  children: [
-                    for (final (index, tag) in _tags.indexed)
-                      InputChip(
-                        label: Text(tag),
-                        deleteButtonTooltipMessage: '$tag のタグを削除',
-                        onDeleted: _saving
-                            ? null
-                            : () {
-                                setState(() {
-                                  _tags.removeAt(index);
-                                });
-                              },
+                const SizedBox(height: 12),
+                TextFormField(
+                  controller: _title,
+                  enabled: !_saving,
+                  style: theme.textTheme.titleLarge,
+                  decoration: const InputDecoration(labelText: 'タイトル'),
+                  validator: (value) =>
+                      (value ?? '').trim().isEmpty ? 'タイトルを入力してください' : null,
+                ),
+                const SizedBox(height: 16),
+                if (_tags.isNotEmpty) ...[
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      for (final (index, tag) in _tags.indexed)
+                        InputChip(
+                          label: Text(tag),
+                          deleteButtonTooltipMessage: '$tag のタグを削除',
+                          onDeleted: _saving
+                              ? null
+                              : () {
+                                  setState(() {
+                                    _tags.removeAt(index);
+                                  });
+                                },
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                ],
+                TextField(
+                  controller: _tagInput,
+                  enabled: !_saving,
+                  textInputAction: TextInputAction.done,
+                  onSubmitted: (_) => _addTag(),
+                  decoration: InputDecoration(
+                    labelText: 'タグを追加',
+                    suffixIcon: Tooltip(
+                      message: 'タグを追加',
+                      child: TextButton(
+                        onPressed: _saving ? null : _addTag,
+                        child: const Text('追加'),
                       ),
-                  ],
-                ),
-              TextField(
-                controller: _tagInput,
-                enabled: !_saving,
-                textInputAction: TextInputAction.done,
-                onSubmitted: (_) => _addTag(),
-                decoration: InputDecoration(
-                  labelText: 'タグを追加',
-                  border: const OutlineInputBorder(),
-                  suffixIcon: Tooltip(
-                    message: 'タグを追加',
-                    child: TextButton(
-                      onPressed: _saving ? null : _addTag,
-                      child: const Text('追加'),
                     ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: _saving ? null : _editQuestions,
-                  icon: const Icon(Icons.edit_note),
-                  label: const Text('質問を編集'),
+                const SizedBox(height: 20),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text('質問と回答', style: theme.textTheme.titleMedium),
+                    ),
+                    TextButton.icon(
+                      onPressed: _saving ? null : _editQuestions,
+                      icon: const Icon(Icons.edit_note),
+                      label: const Text('質問を編集'),
+                    ),
+                  ],
                 ),
-              ),
-
-              for (final entry in _answers.entries) ...[
-                const SizedBox(height: 16),
-                TextFormField(
-                  key: ValueKey(entry.key),
-                  controller: entry.value,
-                  enabled: !_saving,
-                  minLines: 3,
-                  maxLines: null,
-                  decoration: InputDecoration(
-                    labelText: entry.key,
-                    border: const OutlineInputBorder(),
-                    alignLabelWithHint: true,
+                for (final entry in _answers.entries) ...[
+                  const SizedBox(height: 16),
+                  Text(entry.key, style: theme.textTheme.titleMedium),
+                  const SizedBox(height: 8),
+                  Semantics(
+                    label: entry.key,
+                    child: TextFormField(
+                      key: ValueKey(entry.key),
+                      controller: entry.value,
+                      enabled: !_saving,
+                      minLines: 3,
+                      maxLines: null,
+                      decoration: const InputDecoration(hintText: '回答を入力'),
+                    ),
                   ),
-                ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
       ),
-    ),
-  );
+    );
+  }
 }

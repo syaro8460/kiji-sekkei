@@ -363,10 +363,7 @@ void main() {
       }
 
       await tap(find.text('質問を編集する記事'));
-      await tester.enterText(
-        find.widgetWithText(TextFormField, '元の質問'),
-        '編集した回答',
-      );
+      await tester.enterText(find.byKey(const ValueKey('元の質問')), '編集した回答');
       await tap(find.text('質問を編集'));
       await tap(find.text('元の質問'));
       await tester.enterText(find.byType(TextFormField).last, '名前を変えた質問');
@@ -465,10 +462,7 @@ void main() {
       expect(find.text('元の記事（コピー）'), findsOneWidget);
       expect(find.text('元の回答'), findsOneWidget);
       expect(find.widgetWithText(InputChip, '取材記録'), findsOneWidget);
-      await tester.enterText(
-        find.widgetWithText(TextFormField, '質問'),
-        'コピーの回答',
-      );
+      await tester.enterText(find.byKey(const ValueKey('質問')), 'コピーの回答');
       await tap(find.widgetWithText(TextButton, '保存'));
 
       final drafts = await tester.runAsync(

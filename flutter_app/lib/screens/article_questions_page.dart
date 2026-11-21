@@ -1,5 +1,7 @@
 import 'package:material_ui/material_ui.dart';
 
+import 'article_page_frame.dart';
+
 typedef ArticleQuestion = ({String text, String answer});
 
 enum _QuestionAction { rename, delete }
@@ -91,37 +93,45 @@ class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(
-      title: const Text('質問を編集'),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(
-            context,
-            _questions.map((row) => row.question).toList(),
-          ),
-          child: const Text('反映'),
+  Widget build(BuildContext context) => ArticlePageFrame(
+    title: '質問を編集',
+    actions: [
+      TextButton(
+        onPressed: () => Navigator.pop(
+          context,
+          _questions.map((row) => row.question).toList(),
         ),
-      ],
-    ),
-    floatingActionButton: FloatingActionButton.extended(
+        child: const Text('反映'),
+      ),
+    ],
+    bottomAction: FilledButton.icon(
       onPressed: () => _editQuestion(),
       icon: const Icon(Icons.add),
       label: const Text('質問を追加'),
     ),
-    body: SafeArea(
-      child: _questions.isEmpty
-          ? const Center(child: Text('質問はまだありません'))
-          : ReorderableListView.builder(
-              padding: const EdgeInsets.only(bottom: 88),
-              itemCount: _questions.length,
-              buildDefaultDragHandles: false,
-              onReorderItem: _moveQuestion,
-              itemBuilder: (context, index) {
-                final row = _questions[index];
-                final question = row.question;
-                return ListTile(
-                  key: ObjectKey(row),
+    body: _questions.isEmpty
+        ? const Center(child: Text('質問はまだありません'))
+        : ReorderableListView.builder(
+            padding: const EdgeInsets.all(20),
+
+            itemCount: _questions.length,
+            buildDefaultDragHandles: false,
+            onReorderItem: _moveQuestion,
+            itemBuilder: (context, index) {
+              final row = _questions[index];
+              final question = row.question;
+              final colors = Theme.of(context).colorScheme;
+              return Card(
+                key: ObjectKey(row),
+                color: colors.surface,
+                elevation: 0,
+                margin: const EdgeInsets.only(bottom: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                  side: BorderSide(color: colors.outlineVariant),
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: ListTile(
                   title: Text(question.text),
                   onTap: () => _editQuestion(index),
                   trailing: Row(
@@ -154,10 +164,10 @@ class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
                       ),
                     ],
                   ),
-                );
-              },
-            ),
-    ),
+                ),
+              );
+            },
+          ),
   );
 }
 

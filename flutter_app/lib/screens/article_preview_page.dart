@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/article_draft.dart';
 import '../export/markdown_exporter.dart';
+import 'article_page_frame.dart';
 
 class ArticlePreviewPage extends StatefulWidget {
   const ArticlePreviewPage({
@@ -59,47 +60,73 @@ class _ArticlePreviewPageState extends State<ArticlePreviewPage> {
   @override
   Widget build(BuildContext context) {
     final draft = widget.draft;
-    final typography = Theme.of(context).textTheme;
+    final theme = Theme.of(context);
+    final colors = theme.colorScheme;
+    final typography = theme.textTheme;
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('記事のプレビュー')),
-      bottomNavigationBar: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
-          child: FilledButton.icon(
-            onPressed: _exporting ? null : _export,
-            icon: const Icon(Icons.file_download_outlined),
-            label: Text(_exporting ? '保存中…' : '記事をファイルに保存'),
-          ),
-        ),
+    return ArticlePageFrame(
+      title: '記事のプレビュー',
+      bottomAction: FilledButton.icon(
+        onPressed: _exporting ? null : _export,
+        icon: const Icon(Icons.file_download_outlined),
+        label: Text(_exporting ? '保存中…' : '記事をファイルに保存'),
       ),
-      body: SafeArea(
-        bottom: false,
-        child: SelectionArea(
-          child: ListView(
-            padding: const EdgeInsets.all(20),
-            children: [
-              Text(draft.title, style: typography.headlineSmall),
-              const SizedBox(height: 8),
-              Text(draft.articleType, style: typography.labelLarge),
-              if (draft.tags.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
+      body: SelectionArea(
+        child: ListView(
+          padding: const EdgeInsets.all(20),
+          children: [
+            Card(
+              margin: EdgeInsets.zero,
+              color: colors.surface,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: BorderSide(color: colors.outlineVariant),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    for (final tag in draft.tags) Chip(label: Text(tag)),
+                    Text(
+                      draft.articleType,
+                      style: typography.labelLarge?.copyWith(
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      draft.title,
+                      style: typography.headlineSmall?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    if (draft.tags.isNotEmpty) ...[
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: [
+                          for (final tag in draft.tags) Chip(label: Text(tag)),
+                        ],
+                      ),
+                    ],
+                    for (final question in draft.questions) ...[
+                      const SizedBox(height: 16),
+                      Divider(color: colors.outlineVariant),
+                      const SizedBox(height: 8),
+                      Text(question, style: typography.titleMedium),
+                      const SizedBox(height: 6),
+                      Text(
+                        _answerFor(draft, question),
+                        style: typography.bodyLarge?.copyWith(height: 1.6),
+                      ),
+                    ],
                   ],
                 ),
-              ],
-              for (final question in draft.questions) ...[
-                const SizedBox(height: 24),
-                Text(question, style: typography.titleMedium),
-                const SizedBox(height: 6),
-                Text(_answerFor(draft, question)),
-              ],
-            ],
-          ),
+              ),
+            ),
+          ],
         ),
       ),
     );
