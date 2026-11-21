@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 
 import 'package:drift/drift.dart';
@@ -43,7 +44,25 @@ class CustomTemplates extends Table {
 class ArticleDatabase extends _$ArticleDatabase {
   ArticleDatabase(super.executor);
 
-  ArticleDatabase.local() : this(driftDatabase(name: 'kiji_sekkei'));
+  ArticleDatabase.local()
+    : this(
+        driftDatabase(
+          name: 'kiji_sekkei',
+          web: DriftWebOptions(
+            sqlite3Wasm: Uri.parse('sqlite3.wasm'),
+            driftWorker: Uri.parse('drift_worker.js'),
+            onResult: (result) {
+              if (result.chosenImplementation ==
+                  WasmStorageImplementation.inMemory) {
+                unawaited(result.resolvedExecutor.close());
+                throw UnsupportedError(
+                  'Persistent browser storage is unavailable.',
+                );
+              }
+            },
+          ),
+        ),
+      );
 
   @override
   int get schemaVersion => 1;
