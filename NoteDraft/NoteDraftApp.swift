@@ -1,4 +1,5 @@
 import SwiftUI
+import SwiftData
 
 @main
 struct NoteDraftApp: App {
@@ -32,5 +33,6 @@ struct NoteDraftApp: App {
                 isShowingSplash = false
             }
         }
+        .modelContainer(for: StoredArticle.self)
     }
 }
