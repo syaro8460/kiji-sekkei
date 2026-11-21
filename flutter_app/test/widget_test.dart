@@ -1,30 +1,53 @@
-// This is a basic Flutter widget test.
-//
-// To perform an interaction with a widget in your test, use the WidgetTester
-// utility in the flutter_test package. For example, you can send tap and scroll
-// gestures. You can also use WidgetTester to find child widgets in the widget
-// tree, read text, and verify that the values of widget properties are correct.
-
+import 'package:drift/native.dart';
+import 'package:flutter_app/main.dart';
+import 'package:flutter_app/models/article_draft.dart';
+import 'package:flutter_app/models/article_template.dart';
+import 'package:flutter_app/storage/article_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
-import 'package:flutter_app/main.dart';
-
 void main() {
-  testWidgets('Counter increments smoke test', (WidgetTester tester) async {
-    // Build our app and trigger a frame.
-    await tester.pumpWidget(const MyApp());
+  testWidgets('creates and edits a saved article from the list', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(900, 1800));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await tester.runAsync(() => database.listDrafts(DraftStatus.active));
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    expect(find.text('記事はまだありません'), findsOneWidget);
 
-    // Verify that our counter starts at 0.
-    expect(find.text('0'), findsOneWidget);
-    expect(find.text('1'), findsNothing);
+    await tester.tap(find.text('新しい記事'));
+    await tester.pumpAndSettle();
+    final template = ArticleTemplate.builtInTemplates.first;
+    await tester.tap(find.text(template.name));
+    await tester.pumpAndSettle();
 
-    // Tap the '+' icon and trigger a frame.
-    await tester.tap(find.byIcon(Icons.add));
-    await tester.pump();
+    final title = find.byType(TextFormField).first;
+    await tester.enterText(title, '最初の記事');
+    await tester.enterText(find.byType(TextFormField).at(1), '記事のメモ');
+    final save = find.widgetWithText(FilledButton, '保存');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.text('最初の記事'), findsOneWidget);
 
-    // Verify that our counter has incremented.
-    expect(find.text('0'), findsNothing);
-    expect(find.text('1'), findsOneWidget);
+    await tester.tap(find.text('最初の記事'));
+    await tester.pumpAndSettle();
+    expect(find.text('記事のメモ'), findsOneWidget);
+    await tester.enterText(title, '編集した記事');
+    await tester.ensureVisible(save);
+    await tester.tap(save);
+    await tester.pumpAndSettle();
+    expect(find.text('編集した記事'), findsOneWidget);
+    expect(find.text('最初の記事'), findsNothing);
+
+    final drafts = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(drafts!.single.title, '編集した記事');
+    expect(drafts.single.answers[template.questions.first], '記事のメモ');
   });
 }
