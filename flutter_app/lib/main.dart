@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
+import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
 
 void main() => runApp(const MyApp());
@@ -55,6 +56,27 @@ class _ArticleListState extends State<_ArticleList> {
     setState(() {
       _drafts = _loadDrafts();
     });
+  }
+
+  Future<void> _openTrash() async {
+    await Navigator.of(context).push<void>(
+      MaterialPageRoute(
+        builder: (context) => TrashPage(database: widget.database),
+      ),
+    );
+    if (mounted) _reload();
+  }
+
+  Future<void> _moveToTrash(ArticleDraft draft) async {
+    try {
+      await widget.database.moveToTrash(draft.id);
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('記事をゴミ箱へ移動できませんでした。')));
+      return;
+    }
+    if (mounted) _reload();
   }
 
   Future<void> _newArticle() async {
@@ -116,7 +138,16 @@ class _ArticleListState extends State<_ArticleList> {
 
   @override
   Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('記事設計')),
+    appBar: AppBar(
+      title: const Text('記事設計'),
+      actions: [
+        IconButton(
+          onPressed: _openTrash,
+          tooltip: 'ゴミ箱',
+          icon: const Icon(Icons.delete_outline),
+        ),
+      ],
+    ),
     floatingActionButton: FloatingActionButton.extended(
       onPressed: _newArticle,
       icon: const Icon(Icons.add),
@@ -153,7 +184,15 @@ class _ArticleListState extends State<_ArticleList> {
               leading: const Icon(Icons.article_outlined),
               title: Text(draft.title),
               subtitle: Text(draft.articleType),
-              trailing: const Icon(Icons.chevron_right),
+              trailing: PopupMenuButton<void>(
+                tooltip: '記事の操作',
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    onTap: () => _moveToTrash(draft),
+                    child: const Text('ゴミ箱に移動'),
+                  ),
+                ],
+              ),
               onTap: () => _openEditor(draft),
             );
           },
