@@ -6,7 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
 import 'models/json_compat.dart';
-import 'screens/article_page_frame.dart';
+import 'screens/content_page_frame.dart';
 import 'screens/article_preview_page.dart';
 import 'screens/article_questions_page.dart';
 import 'screens/backup_page.dart';
@@ -723,7 +723,7 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     );
     return PopScope(
       canPop: !_saving,
-      child: ArticlePageFrame(
+      child: ContentPageFrame(
         title: widget.isNew ? '新しい記事' : '記事を編集',
         actions: [
           IconButton(

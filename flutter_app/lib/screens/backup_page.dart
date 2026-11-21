@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
 import '../storage/article_database.dart';
+import 'content_page_frame.dart';
 
 class BackupPage extends StatefulWidget {
   const BackupPage({
@@ -100,28 +101,45 @@ class _BackupPageState extends State<BackupPage> {
   @override
   Widget build(BuildContext context) => PopScope(
     canPop: !_restoring,
-    child: Scaffold(
-      appBar: AppBar(title: const Text('バックアップ')),
-      body: SafeArea(
-        child: ListView(
-          children: [
-            ListTile(
+    child: ContentPageFrame(
+      title: 'バックアップ',
+      body: ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          ContentCard(
+            child: ListTile(
               enabled: !_busy,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
               leading: const Icon(Icons.file_download_outlined),
               title: const Text('JSONを書き出す'),
               subtitle: const Text('記事とカスタムテンプレートをファイルに保存'),
+              trailing: const Icon(Icons.chevron_right),
               onTap: _export,
             ),
-            ListTile(
+          ),
+          const SizedBox(height: 8),
+          ContentCard(
+            child: ListTile(
               enabled: !_busy,
+              contentPadding: const EdgeInsets.symmetric(
+                horizontal: 16,
+                vertical: 12,
+              ),
               leading: const Icon(Icons.file_upload_outlined),
               title: const Text('バックアップから復元'),
               subtitle: const Text('保存したJSONファイルを選択'),
+              trailing: const Icon(Icons.chevron_right),
               onTap: _import,
             ),
-            if (_busy) const LinearProgressIndicator(),
+          ),
+          if (_busy) ...[
+            const SizedBox(height: 12),
+            const LinearProgressIndicator(),
           ],
-        ),
+        ],
       ),
     ),
   );

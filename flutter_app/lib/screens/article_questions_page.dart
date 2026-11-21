@@ -1,6 +1,6 @@
 import 'package:material_ui/material_ui.dart';
 
-import 'article_page_frame.dart';
+import 'content_page_frame.dart';
 
 typedef ArticleQuestion = ({String text, String answer});
 
@@ -93,7 +93,7 @@ class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
   }
 
   @override
-  Widget build(BuildContext context) => ArticlePageFrame(
+  Widget build(BuildContext context) => ContentPageFrame(
     title: '質問を編集',
     actions: [
       TextButton(

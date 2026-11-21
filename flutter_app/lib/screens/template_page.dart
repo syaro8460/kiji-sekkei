@@ -3,6 +3,7 @@ import 'package:material_ui/material_ui.dart';
 import '../models/article_template.dart';
 import '../models/json_compat.dart';
 import '../storage/article_database.dart';
+import 'content_page_frame.dart';
 
 enum _TemplateAction { edit, duplicate, up, down, delete }
 
@@ -124,43 +125,43 @@ class _TemplatePageState extends State<TemplatePage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('テンプレート管理')),
-    floatingActionButton: FloatingActionButton.extended(
+  Widget build(BuildContext context) => ContentPageFrame(
+    title: 'テンプレート管理',
+    bottomAction: FilledButton.icon(
       onPressed: _busy ? null : () => _edit(),
       icon: const Icon(Icons.add),
       label: const Text('新しいテンプレート'),
     ),
-    body: SafeArea(
-      child: FutureBuilder<List<ArticleTemplate>>(
-        future: _templates,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('テンプレートを読み込めませんでした。'),
-                  TextButton(onPressed: _reload, child: const Text('再読み込み')),
-                ],
-              ),
-            );
-          }
+    body: FutureBuilder<List<ArticleTemplate>>(
+      future: _templates,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('テンプレートを読み込めませんでした。'),
+                TextButton(onPressed: _reload, child: const Text('再読み込み')),
+              ],
+            ),
+          );
+        }
 
-          final templates = snapshot.requireData;
-          if (templates.isEmpty) {
-            return const Center(child: Text('カスタムテンプレートはまだありません'));
-          }
-          return ListView.separated(
-            padding: const EdgeInsets.only(bottom: 88),
-            itemCount: templates.length,
-            separatorBuilder: (_, _) => const Divider(height: 1),
-            itemBuilder: (context, index) {
-              final template = templates[index];
-              return ListTile(
+        final templates = snapshot.requireData;
+        if (templates.isEmpty) {
+          return const Center(child: Text('カスタムテンプレートはまだありません'));
+        }
+        return ListView.separated(
+          padding: const EdgeInsets.all(20),
+          itemCount: templates.length,
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
+          itemBuilder: (context, index) {
+            final template = templates[index];
+            return ContentCard(
+              child: ListTile(
                 leading: const Icon(Icons.description_outlined),
                 title: Text(template.name),
                 subtitle: Text('質問 ${template.questions.length} 件'),
@@ -196,11 +197,11 @@ class _TemplatePageState extends State<TemplatePage> {
                     ),
                   ],
                 ),
-              );
-            },
-          );
-        },
-      ),
+              ),
+            );
+          },
+        );
+      },
     ),
   );
 }

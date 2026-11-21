@@ -7,7 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/article_draft.dart';
 import '../export/markdown_exporter.dart';
-import 'article_page_frame.dart';
+import 'content_page_frame.dart';
 
 class ArticlePreviewPage extends StatefulWidget {
   const ArticlePreviewPage({
@@ -64,7 +64,7 @@ class _ArticlePreviewPageState extends State<ArticlePreviewPage> {
     final colors = theme.colorScheme;
     final typography = theme.textTheme;
 
-    return ArticlePageFrame(
+    return ContentPageFrame(
       title: '記事のプレビュー',
       bottomAction: FilledButton.icon(
         onPressed: _exporting ? null : _export,

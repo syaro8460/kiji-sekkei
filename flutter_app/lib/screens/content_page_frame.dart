@@ -1,8 +1,8 @@
 import 'package:material_ui/material_ui.dart';
 
-/// A shared width and action placement for the article workflow.
-class ArticlePageFrame extends StatelessWidget {
-  const ArticlePageFrame({
+/// A shared width and action placement for app pages.
+class ContentPageFrame extends StatelessWidget {
+  const ContentPageFrame({
     super.key,
     required this.title,
     required this.body,
@@ -75,4 +75,27 @@ class ArticlePageFrame extends StatelessWidget {
       );
     },
   );
+}
+
+/// A surface for lists of settings or management actions.
+class ContentCard extends StatelessWidget {
+  const ContentCard({super.key, required this.child});
+
+  final Widget child;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    return Card(
+      color: colors.surface,
+      elevation: 0,
+      margin: EdgeInsets.zero,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
+        side: BorderSide(color: colors.outlineVariant),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: child,
+    );
+  }
 }

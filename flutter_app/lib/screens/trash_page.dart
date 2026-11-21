@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../models/article_draft.dart';
 import '../storage/article_database.dart';
+import 'content_page_frame.dart';
 
 enum _TrashAction { restore, delete }
 
@@ -72,44 +73,45 @@ class _TrashPageState extends State<TrashPage> {
   }
 
   @override
-  Widget build(BuildContext context) => Scaffold(
-    appBar: AppBar(title: const Text('ゴミ箱')),
-    body: SafeArea(
-      child: FutureBuilder<List<ArticleDraft>>(
-        future: _drafts,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('ゴミ箱を読み込めませんでした。'),
-                  TextButton(onPressed: _reload, child: const Text('再読み込み')),
-                ],
-              ),
-            );
-          }
+  Widget build(BuildContext context) => ContentPageFrame(
+    title: 'ゴミ箱',
+    body: FutureBuilder<List<ArticleDraft>>(
+      future: _drafts,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        if (snapshot.hasError) {
+          return Center(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text('ゴミ箱を読み込めませんでした。'),
+                TextButton(onPressed: _reload, child: const Text('再読み込み')),
+              ],
+            ),
+          );
+        }
 
-          final drafts = snapshot.requireData;
-          if (drafts.isEmpty) {
-            return const Center(child: Text('ゴミ箱は空です'));
-          }
-          return Column(
-            children: [
-              const Padding(
-                padding: EdgeInsets.all(16),
-                child: Text('ゴミ箱に移してから30日を過ぎた記事は、ゴミ箱を開いたときに削除されます。'),
-              ),
-              Expanded(
-                child: ListView.separated(
-                  itemCount: drafts.length,
-                  separatorBuilder: (_, _) => const Divider(height: 1),
-                  itemBuilder: (context, index) {
-                    final draft = drafts[index];
-                    return ListTile(
+        final drafts = snapshot.requireData;
+        if (drafts.isEmpty) {
+          return const Center(child: Text('ゴミ箱は空です'));
+        }
+        return Column(
+          children: [
+            const Padding(
+              padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
+              child: Text('ゴミ箱に移してから30日を過ぎた記事は、ゴミ箱を開いたときに削除されます。'),
+            ),
+            Expanded(
+              child: ListView.separated(
+                padding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+                itemCount: drafts.length,
+                separatorBuilder: (_, _) => const SizedBox(height: 8),
+                itemBuilder: (context, index) {
+                  final draft = drafts[index];
+                  return ContentCard(
+                    child: ListTile(
                       leading: const Icon(Icons.article_outlined),
                       title: Text(draft.title),
                       subtitle: Text(draft.articleType),
@@ -128,14 +130,14 @@ class _TrashPageState extends State<TrashPage> {
                           ),
                         ],
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  );
+                },
               ),
-            ],
-          );
-        },
-      ),
+            ),
+          ],
+        );
+      },
     ),
   );
 }
