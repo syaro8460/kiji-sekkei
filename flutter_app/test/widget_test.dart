@@ -6,6 +6,7 @@ import 'package:flutter_app/models/backup_manager.dart';
 import 'package:flutter_app/storage/article_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
   testWidgets('creates and edits a saved article from the list', (
@@ -255,4 +256,83 @@ void main() {
       expect(drafts!.singleWhere((draft) => draft.id == id).tags, ['未登録の入力']);
     },
   );
+
+  testWidgets('sorts matching articles and restores the saved order', (
+    tester,
+  ) async {
+    SharedPreferences.setMockInitialValues({
+      'draftSortOrder': 'unknown-setting',
+    });
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await tester.runAsync(() async {
+      await database.saveDraft(
+        ArticleDraft(
+          id: 'aefbe144-0cfc-428c-82c7-4704d2abcc01',
+          title: 'A 古い記事',
+          articleType: '日記',
+          questions: [],
+          updatedAt: DateTime.utc(2026, 1, 1),
+        ),
+      );
+      await database.saveDraft(
+        ArticleDraft(
+          id: 'aefbe144-0cfc-428c-82c7-4704d2abcc02',
+          title: 'Z 新しい記事',
+          articleType: '日記',
+          questions: [],
+          updatedAt: DateTime.utc(2026, 1, 2),
+        ),
+      );
+    });
+    const oldTitle = 'A 古い記事';
+    const newTitle = 'Z 新しい記事';
+    bool appearsBefore(String first, String second) =>
+        tester.getTopLeft(find.text(first)).dy <
+        tester.getTopLeft(find.text(second)).dy;
+
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    expect(find.text('記事数：2件'), findsOneWidget);
+    expect(appearsBefore(newTitle, oldTitle), isTrue);
+
+    Future<void> chooseOrder(String title) async {
+      await tester.tap(find.byTooltip('並べ替え'));
+      await tester.pumpAndSettle();
+      final option = find.ancestor(
+        of: find.text(title),
+        matching: find.byWidgetPredicate(
+          (widget) => widget is CheckedPopupMenuItem,
+        ),
+      );
+      await tester.tap(option);
+      await tester.pumpAndSettle();
+    }
+
+    await chooseOrder('更新日（古い順）');
+    expect(appearsBefore(oldTitle, newTitle), isTrue);
+    await chooseOrder('タイトル（降順）');
+    expect(appearsBefore(newTitle, oldTitle), isTrue);
+    await chooseOrder('タイトル（昇順）');
+    expect(appearsBefore(oldTitle, newTitle), isTrue);
+    await chooseOrder('更新日（新しい順）');
+    expect(appearsBefore(newTitle, oldTitle), isTrue);
+    await chooseOrder('タイトル（昇順）');
+
+    final search = find.widgetWithText(TextField, '記事を検索');
+    await tester.enterText(search, '古い');
+    await tester.pumpAndSettle();
+    expect(find.text('検索結果：1件'), findsOneWidget);
+    expect(find.text(newTitle), findsNothing);
+    await tester.enterText(search, '見つからない');
+    await tester.pumpAndSettle();
+    expect(find.text('検索結果：0件'), findsOneWidget);
+
+    await tester.pumpWidget(const SizedBox.shrink());
+    SharedPreferences.resetStatic();
+    await tester.pumpAndSettle();
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    expect(appearsBefore(oldTitle, newTitle), isTrue);
+  });
 }

@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:material_ui/material_ui.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
@@ -43,6 +44,17 @@ class _MyAppState extends State<MyApp> {
   );
 }
 
+enum _DraftSortOrder {
+  updatedNewest('更新日（新しい順）'),
+  updatedOldest('更新日（古い順）'),
+  titleAscending('タイトル（昇順）'),
+  titleDescending('タイトル（降順）');
+
+  const _DraftSortOrder(this.label);
+
+  final String label;
+}
+
 class _ArticleList extends StatefulWidget {
   const _ArticleList({required this.database});
 
@@ -56,6 +68,65 @@ class _ArticleListState extends State<_ArticleList> {
   late Future<List<ArticleDraft>> _drafts = _loadDrafts();
 
   final _search = TextEditingController();
+  static const _sortPreferenceKey = 'draftSortOrder';
+  _DraftSortOrder _sortOrder = _DraftSortOrder.updatedNewest;
+  late final _preferences = SharedPreferences.getInstance();
+  bool _writingSortOrder = false;
+
+  @override
+  void initState() {
+    super.initState();
+    unawaited(_loadSortOrder());
+  }
+
+  Future<void> _loadSortOrder() async {
+    try {
+      final preferences = await _preferences;
+      final saved = preferences.getString(_sortPreferenceKey);
+      final order = _DraftSortOrder.values
+          .where((order) => order.name == saved)
+          .firstOrNull;
+      if (mounted && order != null && !_writingSortOrder) {
+        setState(() => _sortOrder = order);
+      }
+    } catch (_) {
+      // Keep the default sort order when preferences are unavailable.
+    }
+  }
+
+  Future<void> _selectSortOrder(_DraftSortOrder order) async {
+    if (_writingSortOrder || order == _sortOrder) return;
+    setState(() => _writingSortOrder = true);
+    try {
+      final preferences = await _preferences;
+      final saved = await preferences.setString(_sortPreferenceKey, order.name);
+      if (!saved) throw StateError('Sort order could not be saved.');
+      if (mounted) setState(() => _sortOrder = order);
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('並べ替えの設定を保存できませんでした。')));
+      }
+    } finally {
+      if (mounted) setState(() => _writingSortOrder = false);
+    }
+  }
+
+  List<ArticleDraft> _sortedDrafts(List<ArticleDraft> drafts) {
+    return List<ArticleDraft>.of(drafts)..sort((a, b) {
+      final comparison = switch (_sortOrder) {
+        _DraftSortOrder.updatedNewest => b.updatedAt.compareTo(a.updatedAt),
+        _DraftSortOrder.updatedOldest => a.updatedAt.compareTo(b.updatedAt),
+        _DraftSortOrder.titleAscending => a.title.toLowerCase().compareTo(
+          b.title.toLowerCase(),
+        ),
+        _DraftSortOrder.titleDescending => b.title.toLowerCase().compareTo(
+          a.title.toLowerCase(),
+        ),
+      };
+      return comparison != 0 ? comparison : a.id.compareTo(b.id);
+    });
+  }
 
   @override
   void dispose() {
@@ -196,6 +267,59 @@ class _ArticleListState extends State<_ArticleList> {
     if (mounted && saved == true) _reload();
   }
 
+  Widget _buildDraftList(List<ArticleDraft> drafts) {
+    return ListView.separated(
+      padding: const EdgeInsets.only(bottom: 88),
+      itemCount: drafts.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
+      itemBuilder: (context, index) {
+        final draft = drafts[index];
+        return ListTile(
+          leading: const Icon(Icons.article_outlined),
+          title: Text(draft.title),
+          subtitle: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(draft.articleType),
+              if (draft.tags.isNotEmpty)
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final tag in draft.tags)
+                      ActionChip(
+                        label: Text(tag),
+                        onPressed: () {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          _setSearch(tag);
+                        },
+                      ),
+                  ],
+                ),
+            ],
+          ),
+          trailing: PopupMenuButton<void>(
+            tooltip: '記事の操作',
+            itemBuilder: (_) => [
+              PopupMenuItem(
+                onTap: () => Navigator.of(context).push<void>(
+                  MaterialPageRoute(
+                    builder: (context) => ArticlePreviewPage(draft: draft),
+                  ),
+                ),
+                child: const Text('プレビュー'),
+              ),
+              PopupMenuItem(
+                onTap: () => _moveToTrash(draft),
+                child: const Text('ゴミ箱に移動'),
+              ),
+            ],
+          ),
+          onTap: () => _openEditor(draft),
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) => Scaffold(
     appBar: AppBar(
@@ -268,64 +392,46 @@ class _ArticleListState extends State<_ArticleList> {
                   ),
                 );
               }
-              final drafts = _filterDrafts(snapshot.requireData);
-              if (drafts.isEmpty) {
-                final message = _search.text.trim().isEmpty
-                    ? '記事はまだありません'
-                    : '条件に一致する記事はありません';
-                return Center(child: Text(message));
-              }
-              return ListView.separated(
-                padding: const EdgeInsets.only(bottom: 88),
-                itemCount: drafts.length,
-                separatorBuilder: (_, _) => const Divider(height: 1),
-                itemBuilder: (context, index) {
-                  final draft = drafts[index];
-                  return ListTile(
-                    leading: const Icon(Icons.article_outlined),
-                    title: Text(draft.title),
-                    subtitle: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+              final drafts = _sortedDrafts(_filterDrafts(snapshot.requireData));
+              final searching = _search.text.trim().isNotEmpty;
+              return Column(
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Row(
                       children: [
-                        Text(draft.articleType),
-                        if (draft.tags.isNotEmpty)
-                          Wrap(
-                            spacing: 8,
-                            children: [
-                              for (final tag in draft.tags)
-                                ActionChip(
-                                  label: Text(tag),
-                                  onPressed: () {
-                                    FocusManager.instance.primaryFocus
-                                        ?.unfocus();
-                                    _setSearch(tag);
-                                  },
-                                ),
-                            ],
+                        Expanded(
+                          child: Text(
+                            '${searching ? '検索結果' : '記事数'}：${drafts.length}件',
                           ),
+                        ),
+                        PopupMenuButton<_DraftSortOrder>(
+                          tooltip: '並べ替え',
+                          icon: const Icon(Icons.sort),
+                          enabled: !_writingSortOrder,
+                          onSelected: _selectSortOrder,
+                          itemBuilder: (_) => [
+                            for (final order in _DraftSortOrder.values)
+                              CheckedPopupMenuItem(
+                                value: order,
+                                checked: _sortOrder == order,
+                                child: Text(order.label),
+                              ),
+                          ],
+                        ),
                       ],
                     ),
-                    trailing: PopupMenuButton<void>(
-                      tooltip: '記事の操作',
-                      itemBuilder: (_) => [
-                        PopupMenuItem(
-                          onTap: () => Navigator.of(context).push<void>(
-                            MaterialPageRoute(
-                              builder: (context) =>
-                                  ArticlePreviewPage(draft: draft),
+                  ),
+                  Expanded(
+                    child: drafts.isEmpty
+                        ? Center(
+                            child: Text(
+                              searching ? '条件に一致する記事はありません' : '記事はまだありません',
                             ),
-                          ),
-                          child: const Text('プレビュー'),
-                        ),
-                        PopupMenuItem(
-                          onTap: () => _moveToTrash(draft),
-                          child: const Text('ゴミ箱に移動'),
-                        ),
-                      ],
-                    ),
-                    onTap: () => _openEditor(draft),
-                  );
-                },
+                          )
+                        : _buildDraftList(drafts),
+                  ),
+                ],
               );
             },
           ),
