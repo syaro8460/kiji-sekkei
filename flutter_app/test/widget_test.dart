@@ -32,6 +32,13 @@ void main() {
     final title = find.byType(TextFormField).first;
     await tester.enterText(title, '最初の記事');
     await tester.enterText(find.byType(TextFormField).at(1), '記事のメモ');
+    await tester.tap(find.byTooltip('プレビュー'));
+    await tester.pumpAndSettle();
+    expect(find.text('記事のプレビュー'), findsOneWidget);
+    expect(find.text('記事のメモ'), findsOneWidget);
+    await tester.tap(find.byTooltip('戻る'));
+    await tester.pumpAndSettle();
+
     final save = find.widgetWithText(FilledButton, '保存');
     await tester.ensureVisible(save);
     await tester.tap(save);

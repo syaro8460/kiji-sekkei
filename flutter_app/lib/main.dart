@@ -5,6 +5,7 @@ import 'package:material_ui/material_ui.dart';
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
 import 'models/json_compat.dart';
+import 'screens/article_preview_page.dart';
 import 'screens/backup_page.dart';
 import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
@@ -223,7 +224,15 @@ class _ArticleListState extends State<_ArticleList> {
               subtitle: Text(draft.articleType),
               trailing: PopupMenuButton<void>(
                 tooltip: '記事の操作',
-                itemBuilder: (context) => [
+                itemBuilder: (_) => [
+                  PopupMenuItem(
+                    onTap: () => Navigator.of(context).push<void>(
+                      MaterialPageRoute(
+                        builder: (context) => ArticlePreviewPage(draft: draft),
+                      ),
+                    ),
+                    child: const Text('プレビュー'),
+                  ),
                   PopupMenuItem(
                     onTap: () => _moveToTrash(draft),
                     child: const Text('ゴミ箱に移動'),
@@ -272,27 +281,37 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     super.dispose();
   }
 
+  ArticleDraft _currentDraft() {
+    final original = widget.draft;
+    return ArticleDraft(
+      id: original.id,
+      title: _title.text.trim(),
+      articleType: original.articleType,
+      questions: original.questions,
+      answers: {
+        ...original.answers,
+        for (final entry in _answers.entries) entry.key: entry.value.text,
+      },
+      tags: original.tags,
+      updatedAt: DateTime.now(),
+      status: original.status,
+      deletedAt: original.deletedAt,
+    );
+  }
+
+  void _preview() {
+    if (!_form.currentState!.validate()) return;
+    final draft = _currentDraft();
+    Navigator.of(context).push<void>(
+      MaterialPageRoute(builder: (context) => ArticlePreviewPage(draft: draft)),
+    );
+  }
+
   Future<void> _save() async {
     if (_saving || !_form.currentState!.validate()) return;
     setState(() => _saving = true);
-    final original = widget.draft;
     try {
-      await widget.database.saveDraft(
-        ArticleDraft(
-          id: original.id,
-          title: _title.text.trim(),
-          articleType: original.articleType,
-          questions: original.questions,
-          answers: {
-            ...original.answers,
-            for (final entry in _answers.entries) entry.key: entry.value.text,
-          },
-          tags: original.tags,
-          updatedAt: DateTime.now(),
-          status: original.status,
-          deletedAt: original.deletedAt,
-        ),
-      );
+      await widget.database.saveDraft(_currentDraft());
     } catch (_) {
       if (!mounted) return;
       setState(() => _saving = false);
@@ -308,7 +327,16 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   Widget build(BuildContext context) => PopScope(
     canPop: !_saving,
     child: Scaffold(
-      appBar: AppBar(title: Text(widget.isNew ? '新しい記事' : '記事を編集')),
+      appBar: AppBar(
+        title: Text(widget.isNew ? '新しい記事' : '記事を編集'),
+        actions: [
+          IconButton(
+            onPressed: _saving ? null : _preview,
+            icon: const Icon(Icons.visibility_outlined),
+            tooltip: 'プレビュー',
+          ),
+        ],
+      ),
       body: SafeArea(
         child: Form(
           key: _form,
