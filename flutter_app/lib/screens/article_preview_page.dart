@@ -1,59 +1,36 @@
-import 'dart:convert';
-import 'dart:typed_data';
-
-import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:material_ui/material_ui.dart';
 
 import '../models/article_draft.dart';
-import '../export/markdown_exporter.dart';
+import '../export/article_structure_exporter.dart';
 import 'content_page_frame.dart';
 
 class ArticlePreviewPage extends StatefulWidget {
-  const ArticlePreviewPage({
-    super.key,
-    required this.draft,
-    this.saveMarkdown = _saveMarkdown,
-  });
+  const ArticlePreviewPage({super.key, required this.draft});
 
   final ArticleDraft draft;
-  final Future<bool> Function(String filename, Uint8List bytes) saveMarkdown;
 
   @override
   State<ArticlePreviewPage> createState() => _ArticlePreviewPageState();
 }
 
 class _ArticlePreviewPageState extends State<ArticlePreviewPage> {
-  bool _exporting = false;
-
-  Future<void> _export() async {
-    if (_exporting) return;
-    setState(() => _exporting = true);
-
+  Future<void> _copyStructure() async {
     try {
-      final draft = widget.draft;
-      final safeTitle = draft.title.replaceAll(
-        RegExp(r'[<>:"/\\|?*\x00-\x1F]'),
-        '_',
+      await Clipboard.setData(
+        ClipboardData(text: exportArticleStructure(widget.draft)),
       );
-      final shortTitle = String.fromCharCodes(safeTitle.trim().runes.take(40));
-      final filename = shortTitle.isEmpty ? 'kiji.md' : 'kiji-$shortTitle.md';
-      final saved = await widget.saveMarkdown(
-        filename,
-        utf8.encode(exportMarkdown(draft)),
-      );
-      if (!mounted || !saved) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(kIsWeb ? '記事ファイルのダウンロードを開始しました。' : '記事をファイルに保存しました。'),
-        ),
-      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('記事構成をコピーしました。ChatGPTやnoteに貼り付けられます。')),
+        );
     } catch (_) {
       if (!mounted) return;
       ScaffoldMessenger.of(context)
-          .showSnackBar(const SnackBar(content: Text('記事をファイルに保存できませんでした。')));
-    } finally {
-      if (mounted) setState(() => _exporting = false);
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('記事構成をコピーできませんでした。')));
     }
   }
 
@@ -65,11 +42,11 @@ class _ArticlePreviewPageState extends State<ArticlePreviewPage> {
     final typography = theme.textTheme;
 
     return ContentPageFrame(
-      title: '記事のプレビュー',
+      title: '記事構成',
       bottomAction: FilledButton.icon(
-        onPressed: _exporting ? null : _export,
-        icon: const Icon(Icons.file_download_outlined),
-        label: Text(_exporting ? '保存中…' : '記事をファイルに保存'),
+        onPressed: _copyStructure,
+        icon: const Icon(Icons.copy_outlined),
+        label: const Text('記事構成をコピー'),
       ),
       body: SelectionArea(
         child: ListView(
@@ -136,14 +113,4 @@ class _ArticlePreviewPageState extends State<ArticlePreviewPage> {
 String _answerFor(ArticleDraft draft, String question) {
   final answer = draft.answers[question] ?? '';
   return answer.trim().isEmpty ? '未回答' : answer;
-}
-
-Future<bool> _saveMarkdown(String filename, Uint8List bytes) async {
-  final saved = await FilePicker.saveFile(
-    fileName: filename,
-    mimeType: 'text/markdown',
-    bytes: bytes,
-  );
-  // The web picker starts a download and returns no file URI.
-  return kIsWeb || saved != null;
 }

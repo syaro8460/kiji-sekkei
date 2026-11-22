@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:drift/native.dart';
 import 'package:flutter_app/main.dart';
 import 'package:flutter_app/models/article_draft.dart';
@@ -33,16 +35,17 @@ void main() {
     final title = find.byType(TextFormField).first;
     await tester.enterText(title, '最初の記事');
     await tester.enterText(find.byType(TextFormField).at(1), '記事のメモ');
-    await tester.tap(find.byTooltip('プレビュー'));
+    expect(find.text('記事を書き出す'), findsOneWidget);
+    await tester.tap(find.text('記事構成を作成'));
     await tester.pumpAndSettle();
-    expect(find.text('記事のプレビュー'), findsOneWidget);
+    expect(find.text('記事構成'), findsOneWidget);
+    expect(find.text('記事を書き出す'), findsNothing);
     expect(find.text('記事のメモ'), findsOneWidget);
     await tester.tap(find.byTooltip('戻る'));
     await tester.pumpAndSettle();
 
-    final save = find.widgetWithText(TextButton, '保存');
-    await tester.ensureVisible(save);
-    await tester.tap(save);
+    expect(find.widgetWithText(TextButton, '保存'), findsNothing);
+    await tester.tap(find.byTooltip('戻る'));
     await tester.pumpAndSettle();
     expect(find.text('最初の記事'), findsOneWidget);
 
@@ -50,8 +53,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('記事のメモ'), findsOneWidget);
     await tester.enterText(title, '編集した記事');
-    await tester.ensureVisible(save);
-    await tester.tap(save);
+    await tester.tap(find.byTooltip('戻る'));
     await tester.pumpAndSettle();
     expect(find.text('編集した記事'), findsOneWidget);
     expect(find.text('最初の記事'), findsNothing);
@@ -165,9 +167,7 @@ void main() {
     await tap(find.text('週次レビュー'));
     expect(find.text('次にやること'), findsOneWidget);
     await tester.enterText(find.byType(TextFormField).first, '今週の記事');
-    final save = find.widgetWithText(TextButton, '保存');
-    await tester.ensureVisible(save);
-    await tap(save);
+    await tap(find.byTooltip('戻る'));
 
     await tap(find.byTooltip('テンプレート管理'));
     await tap(find.byTooltip('週次レビューの操作'));
@@ -227,9 +227,8 @@ void main() {
       await tap(find.widgetWithText(TextButton, '追加'));
       expect(find.widgetWithText(InputChip, '作業記録'), findsOneWidget);
       await tester.enterText(input, '未登録の入力');
-      final save = find.widgetWithText(TextButton, '保存');
-      await tap(save);
-      expect(find.widgetWithText(ActionChip, '未登録の入力'), findsOneWidget);
+      await tap(find.byTooltip('戻る'));
+      expect(find.widgetWithText(ActionChip, '未登録の入力'), findsNothing);
 
       await tap(find.widgetWithText(ActionChip, '作業記録'));
       expect(find.text('Release Notes'), findsOneWidget);
@@ -249,11 +248,11 @@ void main() {
 
       await tap(find.text('Release Notes'));
       await tap(find.byTooltip('作業記録 のタグを削除'));
-      await tap(save);
+      await tap(find.byTooltip('戻る'));
       final drafts = await tester.runAsync(
         () => database.listDrafts(DraftStatus.active),
       );
-      expect(drafts!.singleWhere((draft) => draft.id == id).tags, ['未登録の入力']);
+      expect(drafts!.singleWhere((draft) => draft.id == id).tags, isEmpty);
     },
   );
 
@@ -403,11 +402,7 @@ void main() {
       await tap(find.text('削除'));
       await tap(find.text('反映'));
       expect(find.text('編集した回答'), findsOneWidget);
-      final draftsBeforeSave = await tester.runAsync(
-        () => database.listDrafts(DraftStatus.active),
-      );
-      expect(draftsBeforeSave!.single.questions, ['元の質問', '削除する質問']);
-      await tap(find.widgetWithText(TextButton, '保存'));
+      await tap(find.byTooltip('戻る'));
 
       final drafts = await tester.runAsync(
         () => database.listDrafts(DraftStatus.active),
@@ -458,12 +453,12 @@ void main() {
 
       await tap(find.byTooltip('記事の操作'));
       await tap(find.text('複製'));
-      expect(find.text('記事を編集'), findsOneWidget);
+      expect(find.text('記事の内容'), findsOneWidget);
       expect(find.text('元の記事（コピー）'), findsOneWidget);
       expect(find.text('元の回答'), findsOneWidget);
       expect(find.widgetWithText(InputChip, '取材記録'), findsOneWidget);
       await tester.enterText(find.byKey(const ValueKey('質問')), 'コピーの回答');
-      await tap(find.widgetWithText(TextButton, '保存'));
+      await tap(find.byTooltip('戻る'));
 
       final drafts = await tester.runAsync(
         () => database.listDrafts(DraftStatus.active),
@@ -522,4 +517,100 @@ void main() {
     expect(find.byTooltip('テンプレート管理'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
+
+  testWidgets('keeps an unsuccessful auto-save editable and can retry', (
+    tester,
+  ) async {
+    final database = _FailOnceArticleDatabase();
+    addTearDown(database.close);
+    await tester.runAsync(
+      () => database.saveDraft(
+        ArticleDraft(
+          id: '836ae6aa-d595-47bf-b416-90ee746f8b03',
+          title: '保存前のタイトル',
+          articleType: '日記',
+          questions: [],
+        ),
+      ),
+    );
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('保存前のタイトル'));
+    await tester.pumpAndSettle();
+
+    database.failNextSave = true;
+    await tester.enterText(find.byType(TextFormField).first, '保存したいタイトル');
+    await tester.pumpAndSettle();
+    expect(find.text('保存を再試行'), findsOneWidget);
+    final before = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(before!.single.title, '保存前のタイトル');
+
+    await tester.tap(find.text('保存を再試行'));
+    await tester.pumpAndSettle();
+    expect(find.text('自動保存済み'), findsOneWidget);
+    final after = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(after!.single.title, '保存したいタイトル');
+  });
+
+  testWidgets('waits for the newest pending auto-save when going back', (
+    tester,
+  ) async {
+    final database = _FailOnceArticleDatabase();
+    addTearDown(database.close);
+    await tester.runAsync(
+      () => database.saveDraft(
+        ArticleDraft(
+          id: '837255b5-5ea0-4c2d-8e60-ea6bbeceb0ad',
+          title: '元のタイトル',
+          articleType: '日記',
+          questions: [],
+        ),
+      ),
+    );
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('元のタイトル'));
+    await tester.pumpAndSettle();
+
+    final writeGate = Completer<void>();
+    database.nextSaveGate = writeGate.future;
+    final title = find.byType(TextFormField).first;
+    await tester.enterText(title, '途中の入力');
+    await tester.enterText(title, '最後の入力');
+    await tester.tap(find.byTooltip('戻る'));
+    await tester.pump();
+    expect(find.text('記事の内容'), findsOneWidget);
+    writeGate.complete();
+    await tester.pumpAndSettle();
+    expect(find.text('最後の入力'), findsOneWidget);
+    expect(find.text('途中の入力'), findsNothing);
+
+    final drafts = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(drafts!.single.title, '最後の入力');
+  });
+}
+
+class _FailOnceArticleDatabase extends ArticleDatabase {
+  _FailOnceArticleDatabase() : super(NativeDatabase.memory());
+
+  bool failNextSave = false;
+  Future<void>? nextSaveGate;
+
+  @override
+  Future<void> saveDraft(ArticleDraft draft) async {
+    if (failNextSave) {
+      failNextSave = false;
+      throw StateError('Simulated write failure');
+    }
+    final gate = nextSaveGate;
+    nextSaveGate = null;
+    if (gate != null) await gate;
+    await super.saveDraft(draft);
+  }
 }

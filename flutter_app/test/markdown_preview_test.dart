@@ -1,8 +1,7 @@
-import 'dart:convert';
-
 import 'package:flutter_app/export/markdown_exporter.dart';
 import 'package:flutter_app/models/article_draft.dart';
 import 'package:flutter_app/screens/article_preview_page.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 
@@ -25,29 +24,49 @@ void main() {
     expect(exportMarkdown(draft), expected);
   });
 
-  testWidgets('previews content and writes Markdown as UTF-8', (tester) async {
-    String? savedText;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: ArticlePreviewPage(
-          draft: draft,
-          saveMarkdown: (filename, bytes) async {
-            expect(filename, 'kiji-記事 _ 見出し.md');
-            savedText = utf8.decode(bytes);
-            return true;
-          },
-        ),
-      ),
-    );
-    await tester.pumpAndSettle();
+  testWidgets(
+    'copies the visible article structure with the SwiftUI headings',
+    (tester) async {
+      final draft = ArticleDraft(
+        id: 'e8ad7e77-d390-4c9a-9c33-a43fd9d89ff9',
+        title: '購入したもの',
+        articleType: 'レビュー',
+        questions: ['編集した質問', 'まだ書いていない質問'],
+        answers: {
+          '編集した質問': '  最初の行\n次の行  ',
+          'まだ書いていない質問': '   ',
+          '古い質問': 'コピーには載せない',
+        },
+      );
+      String? clipboardText;
+      final messenger =
+          TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
+      messenger.setMockMethodCallHandler(SystemChannels.platform, (call) async {
+        if (call.method == 'Clipboard.setData') {
+          clipboardText =
+              (call.arguments as Map<Object?, Object?>)['text'] as String;
+        }
+        return null;
+      });
+      addTearDown(
+        () => messenger.setMockMethodCallHandler(SystemChannels.platform, null),
+      );
 
-    expect(find.text('記事 / 見出し'), findsOneWidget);
-    expect(find.text('記事タグ'), findsOneWidget);
-    expect(find.text('一行目\n二行目'), findsOneWidget);
-    expect(find.text('未回答'), findsOneWidget);
-    await tester.tap(find.text('記事をファイルに保存'));
-    await tester.pumpAndSettle();
-    expect(savedText, expected);
-    expect(find.text('記事をファイルに保存しました。'), findsOneWidget);
-  });
+      await tester.pumpWidget(
+        MaterialApp(home: ArticlePreviewPage(draft: draft)),
+      );
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('記事構成をコピー'));
+      await tester.pumpAndSettle();
+
+      expect(
+        clipboardText,
+        '【タイトル】\n購入したもの\n\n【記事種類】\nレビュー\n\n\n'
+        '【質問1】\n編集した質問\n\n【回答】\n最初の行\n次の行\n\n'
+        '【質問2】\nまだ書いていない質問\n\n【回答】\n【未入力】',
+      );
+      expect(find.text('記事構成をコピーしました。ChatGPTやnoteに貼り付けられます。'), findsOneWidget);
+      expect(find.text('記事を書き出す'), findsNothing);
+    },
+  );
 }

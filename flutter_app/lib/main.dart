@@ -1,8 +1,13 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
 
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+import 'export/markdown_exporter.dart';
 import 'models/article_draft.dart';
 import 'models/article_template.dart';
 import 'models/json_compat.dart';
@@ -287,7 +292,7 @@ class _ArticleListState extends State<_ArticleList> {
   }
 
   Future<void> _openEditor(ArticleDraft draft, {bool isNew = false}) async {
-    final saved = await Navigator.of(context).push<bool>(
+    await Navigator.of(context).push<void>(
       MaterialPageRoute(
         builder: (context) => _ArticleEditor(
           database: widget.database,
@@ -296,7 +301,7 @@ class _ArticleListState extends State<_ArticleList> {
         ),
       ),
     );
-    if (mounted && saved == true) _reload();
+    if (mounted) _reload();
   }
 
   Widget _buildDraftList(List<ArticleDraft> drafts, {required bool wide}) {
@@ -598,7 +603,6 @@ class _ArticleEditor extends StatefulWidget {
 }
 
 class _ArticleEditorState extends State<_ArticleEditor> {
-  final _form = GlobalKey<FormState>();
   late final _title = TextEditingController(text: widget.draft.title);
   late List<String> _questions = List.of(widget.draft.questions);
   late Map<String, TextEditingController> _answers = {
@@ -611,7 +615,12 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   late final _tags = List<String>.of(widget.draft.tags);
   final _tagInput = TextEditingController();
 
-  bool _saving = false;
+  ArticleDraft? _pendingDraft;
+  Future<void>? _saving;
+  bool _saveFailed = false;
+  bool _closingEditor = false;
+  bool _exporting = false;
+  late bool _hasSaved = !widget.isNew;
 
   @override
   void dispose() {
@@ -626,10 +635,12 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   void _addTag() {
     final tag = _tagInput.text.trim();
     if (tag.isEmpty) return;
+    final added = !_tags.contains(tag);
     setState(() {
-      if (!_tags.contains(tag)) _tags.add(tag);
+      if (added) _tags.add(tag);
       _tagInput.clear();
     });
+    if (added) _queueSave();
   }
 
   Future<void> _editQuestions() async {
@@ -660,6 +671,7 @@ class _ArticleEditorState extends State<_ArticleEditor> {
         (question, _) => _answers.containsKey(question),
       );
     });
+    _queueSave();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       for (final controller in previousControllers) {
         controller.dispose();
@@ -669,48 +681,139 @@ class _ArticleEditorState extends State<_ArticleEditor> {
 
   ArticleDraft _currentDraft() {
     final original = widget.draft;
-    final pendingTag = _tagInput.text.trim();
+    final title = _title.text.trim();
     return ArticleDraft(
       id: original.id,
-      title: _title.text.trim(),
+      title: title.isEmpty ? '無題の記事' : title,
       articleType: original.articleType,
       questions: List.of(_questions),
       answers: {
         ..._extraAnswers,
         for (final entry in _answers.entries) entry.key: entry.value.text,
       },
-      tags: [
-        ..._tags,
-        if (pendingTag.isNotEmpty && !_tags.contains(pendingTag)) pendingTag,
-      ],
+      tags: List.of(_tags),
       updatedAt: DateTime.now(),
       status: original.status,
       deletedAt: original.deletedAt,
     );
   }
 
+  void _queueSave() {
+    // Opening a new editor and leaving it empty shouldn't create a draft.
+    if (!_hasSaved &&
+        _saving == null &&
+        _pendingDraft == null &&
+        _title.text.trim().isEmpty &&
+        _tags.isEmpty &&
+        _answers.values.every((answer) => answer.text.trim().isEmpty) &&
+        listEquals(_questions, widget.draft.questions)) {
+      return;
+    }
+    _pendingDraft = _currentDraft();
+    unawaited(_savePending());
+  }
+
+  Future<void> _savePending() {
+    final inProgress = _saving;
+    if (inProgress != null) return inProgress;
+    if (_pendingDraft == null) return Future.value();
+
+    final save = _drainSaves().whenComplete(() {
+      _saving = null;
+      if (mounted) setState(() {});
+    });
+    setState(() {
+      _saveFailed = false;
+      _saving = save;
+    });
+    return save;
+  }
+
+  Future<void> _drainSaves() async {
+    // Finish the current write before saving the newest available snapshot.
+    while (_pendingDraft != null) {
+      final draft = _pendingDraft!;
+      _pendingDraft = null;
+      try {
+        await widget.database.saveDraft(draft);
+        _hasSaved = true;
+      } catch (_) {
+        _pendingDraft ??= draft;
+        _saveFailed = true;
+        return;
+      }
+    }
+  }
+
+  Future<void> _closeEditor() async {
+    if (_closingEditor) return;
+    _closingEditor = true;
+    try {
+      await _savePending();
+      if (!mounted) return;
+      if (_pendingDraft != null) {
+        final close = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('変更を保存できませんでした'),
+            content: const Text('保存せずに閉じると、まだ保存されていない変更は失われます。'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('編集に戻る'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('保存せずに閉じる'),
+              ),
+            ],
+          ),
+        );
+        if (!mounted || close != true) return;
+      }
+      Navigator.of(context).pop();
+    } finally {
+      _closingEditor = false;
+    }
+  }
+
+  Future<void> _export() async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+
+    try {
+      final draft = _currentDraft();
+      final safeTitle = draft.title.replaceAll(
+        RegExp(r'[<>:"/\\|?*\x00-\x1F]'),
+        '_',
+      );
+      final shortTitle = String.fromCharCodes(safeTitle.trim().runes.take(40));
+      final filename = shortTitle.isEmpty ? 'kiji.md' : 'kiji-$shortTitle.md';
+      final saved = await _saveMarkdown(
+        filename,
+        utf8.encode(exportMarkdown(draft)),
+      );
+      if (!mounted || !saved) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(kIsWeb ? '記事ファイルのダウンロードを開始しました。' : '記事を書き出しました。'),
+        ),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context)
+          .showSnackBar(const SnackBar(content: Text('記事を書き出せませんでした。')));
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   void _preview() {
-    if (!_form.currentState!.validate()) return;
+    FocusManager.instance.primaryFocus?.unfocus();
     final draft = _currentDraft();
     Navigator.of(context).push<void>(
       MaterialPageRoute(builder: (context) => ArticlePreviewPage(draft: draft)),
     );
-  }
-
-  Future<void> _save() async {
-    if (_saving || !_form.currentState!.validate()) return;
-    setState(() => _saving = true);
-    try {
-      await widget.database.saveDraft(_currentDraft());
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _saving = false);
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('保存できませんでした。もう一度お試しください。')));
-      return;
-    }
-    if (mounted) Navigator.pop(context, true);
   }
 
   @override
@@ -722,20 +825,63 @@ class _ArticleEditorState extends State<_ArticleEditor> {
       borderSide: BorderSide(color: colors.outlineVariant),
     );
     return PopScope(
-      canPop: !_saving,
+      canPop: _pendingDraft == null && _saving == null,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) unawaited(_closeEditor());
+      },
       child: ContentPageFrame(
-        title: widget.isNew ? '新しい記事' : '記事を編集',
+        title: widget.isNew ? '新しい記事' : '記事の内容',
         actions: [
-          IconButton(
-            onPressed: _saving ? null : _preview,
-            icon: const Icon(Icons.visibility_outlined),
-            tooltip: 'プレビュー',
-          ),
-          TextButton(
-            onPressed: _saving ? null : _save,
-            child: Text(_saving ? '保存中…' : '保存'),
-          ),
+          if (_saveFailed)
+            TextButton(onPressed: _savePending, child: const Text('保存を再試行'))
+          else if (_saving != null || _hasSaved)
+            Center(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Text(
+                  _saving != null ? '保存中…' : '自動保存済み',
+                  style: theme.textTheme.labelMedium?.copyWith(
+                    color: colors.onSurfaceVariant,
+                  ),
+                ),
+              ),
+            ),
         ],
+        bottomAction: LayoutBuilder(
+          builder: (context, constraints) {
+            final compact = constraints.maxWidth < 440;
+            final save = OutlinedButton.icon(
+              onPressed: _exporting ? null : _export,
+              icon: const Icon(Icons.file_download_outlined),
+              label: Text(_exporting ? '書き出し中…' : '記事を書き出す'),
+              style: compact
+                  ? OutlinedButton.styleFrom(minimumSize: const Size(0, 48))
+                  : null,
+            );
+            final copy = FilledButton.icon(
+              onPressed: _preview,
+              icon: const Icon(Icons.description_outlined),
+              label: const Text('記事構成を作成'),
+              style: compact
+                  ? FilledButton.styleFrom(minimumSize: const Size(0, 48))
+                  : null,
+            );
+            if (compact) {
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [save, const SizedBox(height: 8), copy],
+              );
+            }
+            return Wrap(
+              alignment: WrapAlignment.end,
+              spacing: 8,
+              runSpacing: 8,
+              children: [save, copy],
+            );
+          },
+        ),
+
         body: Theme(
           data: theme.copyWith(
             inputDecorationTheme: InputDecorationThemeData(
@@ -745,96 +891,97 @@ class _ArticleEditorState extends State<_ArticleEditor> {
               enabledBorder: border,
             ),
           ),
-          child: Form(
-            key: _form,
-            child: ListView(
-              padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
-              children: [
-                Text(
-                  widget.draft.articleType,
-                  style: theme.textTheme.labelLarge,
-                ),
-                const SizedBox(height: 12),
-                TextFormField(
-                  controller: _title,
-                  enabled: !_saving,
-                  style: theme.textTheme.titleLarge,
-                  decoration: const InputDecoration(labelText: 'タイトル'),
-                  validator: (value) =>
-                      (value ?? '').trim().isEmpty ? 'タイトルを入力してください' : null,
-                ),
-                const SizedBox(height: 16),
-                if (_tags.isNotEmpty) ...[
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: [
-                      for (final (index, tag) in _tags.indexed)
-                        InputChip(
-                          label: Text(tag),
-                          deleteButtonTooltipMessage: '$tag のタグを削除',
-                          onDeleted: _saving
-                              ? null
-                              : () {
-                                  setState(() {
-                                    _tags.removeAt(index);
-                                  });
-                                },
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                ],
-                TextField(
-                  controller: _tagInput,
-                  enabled: !_saving,
-                  textInputAction: TextInputAction.done,
-                  onSubmitted: (_) => _addTag(),
-                  decoration: InputDecoration(
-                    labelText: 'タグを追加',
-                    suffixIcon: Tooltip(
-                      message: 'タグを追加',
-                      child: TextButton(
-                        onPressed: _saving ? null : _addTag,
-                        child: const Text('追加'),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 20),
-                Row(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
+            children: [
+              Text(widget.draft.articleType, style: theme.textTheme.labelLarge),
+              const SizedBox(height: 12),
+              TextFormField(
+                controller: _title,
+                onChanged: (_) => _queueSave(),
+                style: theme.textTheme.titleLarge,
+                decoration: const InputDecoration(labelText: 'タイトル'),
+              ),
+              const SizedBox(height: 16),
+              if (_tags.isNotEmpty) ...[
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
                   children: [
-                    Expanded(
-                      child: Text('質問と回答', style: theme.textTheme.titleMedium),
-                    ),
-                    TextButton.icon(
-                      onPressed: _saving ? null : _editQuestions,
-                      icon: const Icon(Icons.edit_note),
-                      label: const Text('質問を編集'),
-                    ),
+                    for (final (index, tag) in _tags.indexed)
+                      InputChip(
+                        label: Text(tag),
+                        deleteButtonTooltipMessage: '$tag のタグを削除',
+                        onDeleted: () {
+                          setState(() {
+                            _tags.removeAt(index);
+                          });
+                          _queueSave();
+                        },
+                      ),
                   ],
                 ),
-                for (final entry in _answers.entries) ...[
-                  const SizedBox(height: 16),
-                  Text(entry.key, style: theme.textTheme.titleMedium),
-                  const SizedBox(height: 8),
-                  Semantics(
-                    label: entry.key,
-                    child: TextFormField(
-                      key: ValueKey(entry.key),
-                      controller: entry.value,
-                      enabled: !_saving,
-                      minLines: 3,
-                      maxLines: null,
-                      decoration: const InputDecoration(hintText: '回答を入力'),
+                const SizedBox(height: 8),
+              ],
+              TextField(
+                controller: _tagInput,
+
+                textInputAction: TextInputAction.done,
+                onSubmitted: (_) => _addTag(),
+                decoration: InputDecoration(
+                  labelText: 'タグを追加',
+                  suffixIcon: Tooltip(
+                    message: 'タグを追加',
+                    child: TextButton(
+                      onPressed: _addTag,
+                      child: const Text('追加'),
                     ),
                   ),
+                ),
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  Expanded(
+                    child: Text('質問と回答', style: theme.textTheme.titleMedium),
+                  ),
+                  TextButton.icon(
+                    onPressed: _editQuestions,
+                    icon: const Icon(Icons.edit_note),
+                    label: const Text('質問を編集'),
+                  ),
                 ],
+              ),
+              for (final entry in _answers.entries) ...[
+                const SizedBox(height: 16),
+                Text(entry.key, style: theme.textTheme.titleMedium),
+                const SizedBox(height: 8),
+                Semantics(
+                  label: entry.key,
+                  child: TextFormField(
+                    key: ValueKey(entry.key),
+                    controller: entry.value,
+                    onChanged: (_) => _queueSave(),
+                    minLines: 3,
+                    maxLines: null,
+                    decoration: const InputDecoration(hintText: '回答を入力'),
+                  ),
+                ),
               ],
-            ),
+            ],
           ),
         ),
       ),
     );
   }
+}
+
+Future<bool> _saveMarkdown(String filename, Uint8List bytes) async {
+  final saved = await FilePicker.saveFile(
+    fileName: filename,
+    mimeType: 'text/markdown',
+    bytes: bytes,
+  );
+  // The web picker starts a download and returns no file URI.
+  return kIsWeb || saved != null;
 }

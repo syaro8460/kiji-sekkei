@@ -66,7 +66,7 @@ class ContentPageFrame extends StatelessWidget {
                       padding: const EdgeInsets.fromLTRB(20, 10, 20, 10),
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.end,
-                        children: [action],
+                        children: [Flexible(child: action)],
                       ),
                     ),
                   ),
