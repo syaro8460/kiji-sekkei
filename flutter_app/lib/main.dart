@@ -603,6 +603,7 @@ class _ArticleEditor extends StatefulWidget {
 }
 
 class _ArticleEditorState extends State<_ArticleEditor> {
+  late String _articleType = widget.draft.articleType;
   late final _title = TextEditingController(text: widget.draft.title);
   late List<String> _questions = List.of(widget.draft.questions);
   late Map<String, TextEditingController> _answers = {
@@ -643,6 +644,42 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     if (added) _queueSave();
   }
 
+  Future<void> _changeTemplate() async {
+    final List<ArticleTemplate> templates;
+    try {
+      templates = [
+        ...ArticleTemplate.builtInTemplates,
+        ...await widget.database.listCustomTemplates(),
+      ];
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context)
+            .showSnackBar(const SnackBar(content: Text('テンプレートを読み込めませんでした。')));
+      }
+      return;
+    }
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    final choice = await Navigator.of(context)
+        .push<({ArticleTemplate template, bool keepAnswers})>(
+          MaterialPageRoute(
+            builder: (context) =>
+                _ArticleTemplateSelection(templates: templates),
+          ),
+        );
+    if (!mounted || choice == null) return;
+
+    final answers = _currentDraft().answers;
+    _articleType = choice.template.name;
+    _extraAnswers.clear();
+    _replaceQuestions([
+      for (final question in choice.template.questions)
+        (
+          text: question,
+          answer: choice.keepAnswers ? answers[question] ?? '' : '',
+        ),
+    ]);
+  }
+
   Future<void> _editQuestions() async {
     final edited = await Navigator.of(context).push<List<ArticleQuestion>>(
       MaterialPageRoute(
@@ -656,6 +693,10 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     );
     if (!mounted || edited == null) return;
 
+    _replaceQuestions(edited);
+  }
+
+  void _replaceQuestions(List<ArticleQuestion> edited) {
     final previousControllers = _answers.values.toList();
     final nextControllers = <String, TextEditingController>{};
     for (final question in edited) {
@@ -685,7 +726,7 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     return ArticleDraft(
       id: original.id,
       title: title.isEmpty ? '無題の記事' : title,
-      articleType: original.articleType,
+      articleType: _articleType,
       questions: List.of(_questions),
       answers: {
         ..._extraAnswers,
@@ -706,6 +747,7 @@ class _ArticleEditorState extends State<_ArticleEditor> {
         _title.text.trim().isEmpty &&
         _tags.isEmpty &&
         _answers.values.every((answer) => answer.text.trim().isEmpty) &&
+        _articleType == widget.draft.articleType &&
         listEquals(_questions, widget.draft.questions)) {
       return;
     }
@@ -894,7 +936,14 @@ class _ArticleEditorState extends State<_ArticleEditor> {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 28),
             children: [
-              Text(widget.draft.articleType, style: theme.textTheme.labelLarge),
+              ContentCard(
+                child: ListTile(
+                  title: const Text('記事種類'),
+                  subtitle: Text(_articleType),
+                  trailing: const Icon(Icons.chevron_right),
+                  onTap: _changeTemplate,
+                ),
+              ),
               const SizedBox(height: 12),
               TextFormField(
                 controller: _title,
@@ -984,4 +1033,60 @@ Future<bool> _saveMarkdown(String filename, Uint8List bytes) async {
   );
   // The web picker starts a download and returns no file URI.
   return kIsWeb || saved != null;
+}
+
+class _ArticleTemplateSelection extends StatelessWidget {
+  const _ArticleTemplateSelection({required this.templates});
+
+  final List<ArticleTemplate> templates;
+
+  Future<void> _select(BuildContext context, ArticleTemplate template) async {
+    final keepAnswers = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('テンプレートを変更しますか？'),
+        content: const Text('変更後の質問と回答の扱いを選んでください。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('キャンセル'),
+          ),
+          TextButton(
+            style: TextButton.styleFrom(
+              foregroundColor: Theme.of(context).colorScheme.error,
+            ),
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('質問と回答をリセット'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('共通する質問・回答を引き継ぐ'),
+          ),
+        ],
+      ),
+    );
+    if (context.mounted && keepAnswers != null) {
+      Navigator.pop(context, (template: template, keepAnswers: keepAnswers));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) => ContentPageFrame(
+    title: 'テンプレートを選択',
+    body: ListView.separated(
+      padding: const EdgeInsets.all(20),
+      itemCount: templates.length,
+      separatorBuilder: (_, _) => const SizedBox(height: 8),
+      itemBuilder: (context, index) {
+        final template = templates[index];
+        return ContentCard(
+          child: ListTile(
+            title: Text(template.name),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _select(context, template),
+          ),
+        );
+      },
+    ),
+  );
 }

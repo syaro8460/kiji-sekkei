@@ -594,6 +594,68 @@ void main() {
     );
     expect(drafts!.single.title, '最後の入力');
   });
+
+  testWidgets('changes an article template with the iOS answer options', (
+    tester,
+  ) async {
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await tester.runAsync(() async {
+      await database.saveDraft(
+        ArticleDraft(
+          id: 'c2488e26-f025-492e-9ddf-5c0aae104bdd',
+          title: '種類変更の記事',
+          articleType: '元の種類',
+          questions: ['共通の質問', '元だけの質問'],
+          answers: {'共通の質問': '残す回答', '元だけの質問': '外す回答'},
+          tags: ['残すタグ'],
+        ),
+      );
+      await database.saveCustomTemplate(
+        ArticleTemplate(
+          id: 'd559f1e3-097d-464b-920b-c57c7cc6fd79',
+          name: '変更先',
+          questions: ['共通の質問', '新しい質問'],
+        ),
+      );
+    });
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    Future<void> tap(String label) async {
+      await tester.tap(find.text(label));
+      await tester.pumpAndSettle();
+    }
+
+    Future<void> choose() async {
+      await tap('記事種類');
+      expect(find.text('テンプレートを選択'), findsOneWidget);
+      await tap('変更先');
+    }
+
+    await tap('種類変更の記事');
+    await choose();
+    await tap('キャンセル');
+    await tester.tap(find.byTooltip('戻る'));
+    await tester.pumpAndSettle();
+    expect(find.text('残す回答'), findsOneWidget);
+
+    await choose();
+    await tap('共通する質問・回答を引き継ぐ');
+    final kept = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(kept!.single.articleType, '変更先');
+    expect(kept.single.questions, ['共通の質問', '新しい質問']);
+    expect(kept.single.answers, {'共通の質問': '残す回答', '新しい質問': ''});
+    expect(kept.single.tags, ['残すタグ']);
+
+    await choose();
+    await tap('質問と回答をリセット');
+    final reset = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(reset!.single.answers.values, everyElement(isEmpty));
+  });
 }
 
 class _FailOnceArticleDatabase extends ArticleDatabase {
