@@ -4,7 +4,8 @@ import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -20,6 +21,7 @@ import 'screens/new_article_page.dart';
 import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
+import 'storage/legacy_ios_migration.dart';
 
 void main() => runApp(const MyApp());
 
@@ -35,6 +37,57 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   late final ArticleDatabase _database =
       widget.database ?? ArticleDatabase.local();
+
+  late Future<void> _legacyMigration = migrateLegacyIosData(_database);
+  bool _continueWithLocalData = false;
+
+  Widget _home() {
+    if (kIsWeb ||
+        defaultTargetPlatform != TargetPlatform.iOS ||
+        _continueWithLocalData) {
+      return _ArticleList(database: _database);
+    }
+    return FutureBuilder<void>(
+      future: _legacyMigration,
+      builder: (context, snapshot) {
+        if (snapshot.connectionState != ConnectionState.done) {
+          return const Scaffold(
+            body: Center(child: CircularProgressIndicator()),
+          );
+        }
+        if (snapshot.hasError) {
+          return Scaffold(
+            body: SafeArea(
+              child: Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('旧版のデータ移行を保留しました。既存データは保持されています。'),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _legacyMigration = migrateLegacyIosData(_database);
+                        }),
+                        child: const Text('再試行'),
+                      ),
+                      TextButton(
+                        onPressed: () => setState(() {
+                          _continueWithLocalData = true;
+                        }),
+                        child: const Text('現在のデータで開く'),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+        return _ArticleList(database: _database);
+      },
+    );
+  }
 
   @override
   void dispose() {
@@ -54,7 +107,7 @@ class _MyAppState extends State<MyApp> {
     supportedLocales: const [Locale('ja', 'JP')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
     theme: ThemeData(colorSchemeSeed: const Color(0xFF365C51)),
-    home: _ArticleList(database: _database),
+    home: _home(),
   );
 }
 

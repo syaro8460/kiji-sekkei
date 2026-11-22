@@ -3,6 +3,8 @@ import 'dart:convert';
 
 import 'package:drift/drift.dart';
 import 'package:drift_flutter/drift_flutter.dart';
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb, listEquals, mapEquals;
 
 import '../models/article_draft.dart';
 import '../models/article_template.dart';
@@ -40,7 +42,14 @@ class CustomTemplates extends Table {
   Set<Column> get primaryKey => {id};
 }
 
-@DriftDatabase(tables: [Drafts, CustomTemplates])
+class MigrationReceipts extends Table {
+  TextColumn get id => text()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+}
+
+@DriftDatabase(tables: [Drafts, CustomTemplates, MigrationReceipts])
 class ArticleDatabase extends _$ArticleDatabase {
   ArticleDatabase(super.executor);
 
@@ -65,7 +74,96 @@ class ArticleDatabase extends _$ArticleDatabase {
       );
 
   @override
-  int get schemaVersion => 1;
+  int get schemaVersion => 2;
+
+  @override
+  MigrationStrategy get migration => MigrationStrategy(
+    onUpgrade: (migrator, from, to) async {
+      if (from < 2) await migrator.createTable(migrationReceipts);
+    },
+  );
+
+  static const _legacyIosReceipt = 'swiftui-ios-1.0';
+
+  Future<bool> hasCompletedLegacyIosMigration() async =>
+      await (select(
+        migrationReceipts,
+      )..where((row) => row.id.equals(_legacyIosReceipt))).getSingleOrNull() !=
+      null;
+
+  Future<void> importLegacyIosData(
+    List<ArticleDraft> sourceDrafts,
+    List<ArticleTemplate> sourceTemplates,
+  ) {
+    return transaction(() async {
+      if (await hasCompletedLegacyIosMigration()) return;
+
+      final expectedDrafts = {
+        for (final draft in sourceDrafts) requireUuid(draft.id, 'id'): draft,
+      };
+      final expectedTemplates = {
+        for (final template in sourceTemplates)
+          requireUuid(template.id, 'id'): template,
+      };
+      if (expectedDrafts.length != sourceDrafts.length ||
+          expectedTemplates.length != sourceTemplates.length) {
+        throw const FormatException('Duplicate IDs in legacy data.');
+      }
+
+      final localDrafts = {
+        for (final row in await select(drafts).get()) row.id: row,
+      };
+      for (final entry in expectedDrafts.entries) {
+        final existing = localDrafts[entry.key];
+        if (existing == null) {
+          await into(drafts).insert(_draftRow(entry.value));
+        } else if (!_matchesLegacyDraft(existing, entry.value)) {
+          throw const FormatException(
+            'Legacy article conflicts with local data.',
+          );
+        }
+      }
+
+      final ordered = await _orderedTemplates();
+      final localTemplates = {for (final row in ordered) row.id: row};
+      var nextPosition = ordered.isEmpty ? 0 : ordered.last.position + 1;
+      for (final entry in expectedTemplates.entries) {
+        final expected = _templateRow(entry.value, nextPosition);
+        final existing = localTemplates[entry.key];
+        if (existing == null) {
+          await into(customTemplates).insert(expected);
+          nextPosition++;
+        } else if (!_matchesLegacyTemplate(existing, entry.value)) {
+          throw const FormatException(
+            'Legacy template conflicts with local data.',
+          );
+        }
+      }
+
+      final verifiedDrafts = {
+        for (final row in await select(drafts).get()) row.id: row,
+      };
+      final verifiedTemplates = (await _orderedTemplates())
+          .where((row) => expectedTemplates.containsKey(row.id))
+          .toList();
+      if (!expectedDrafts.entries.every((entry) {
+            final row = verifiedDrafts[entry.key];
+            return row != null && _matchesLegacyDraft(row, entry.value);
+          }) ||
+          !listEquals(
+            verifiedTemplates.map((row) => row.id).toList(),
+            expectedTemplates.keys.toList(),
+          ) ||
+          !verifiedTemplates.every(
+            (row) => _matchesLegacyTemplate(row, expectedTemplates[row.id]!),
+          )) {
+        throw const FormatException('Legacy migration verification failed.');
+      }
+
+      await into(migrationReceipts)
+          .insert(const MigrationReceipt(id: _legacyIosReceipt));
+    });
+  }
 
   Future<void> saveDraft(ArticleDraft draft) async {
     await into(drafts).insertOnConflictUpdate(_draftRow(draft));
@@ -123,7 +221,11 @@ class ArticleDatabase extends _$ArticleDatabase {
         .go();
   }
 
+  bool get autoRemovesExpiredTrash =>
+      kIsWeb || defaultTargetPlatform != TargetPlatform.iOS;
+
   Future<int> removeExpiredTrash({DateTime? now}) {
+    if (!autoRemovesExpiredTrash) return Future.value(0);
     final local = (now ?? DateTime.now()).toLocal();
     final cutoff = DateTime(
       local.year,
@@ -279,3 +381,21 @@ ArticleTemplate _template(TemplateRow row) => ArticleTemplate(
 
 List<String> _decodeList(String value) =>
     (jsonDecode(value) as List<dynamic>).cast<String>();
+
+bool _matchesLegacyDraft(DraftRow row, ArticleDraft source) {
+  final draft = _draft(row);
+  return draft.title == source.title &&
+      draft.articleType == source.articleType &&
+      listEquals(draft.questions, source.questions) &&
+      mapEquals(draft.answers, source.answers) &&
+      listEquals(draft.tags, source.tags) &&
+      draft.updatedAt.isAtSameMomentAs(source.updatedAt) &&
+      draft.status == source.status &&
+      draft.deletedAt?.microsecondsSinceEpoch ==
+          source.deletedAt?.microsecondsSinceEpoch;
+}
+
+bool _matchesLegacyTemplate(TemplateRow row, ArticleTemplate source) =>
+    row.name == source.name &&
+    row.iconName == source.iconName &&
+    listEquals(_decodeList(row.questions), source.questions);

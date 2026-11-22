@@ -922,6 +922,162 @@ class CustomTemplatesCompanion extends UpdateCompanion<TemplateRow> {
   }
 }
 
+class $MigrationReceiptsTable extends MigrationReceipts
+    with TableInfo<$MigrationReceiptsTable, MigrationReceipt> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $MigrationReceiptsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<String> id = GeneratedColumn<String>(
+    'id',
+    aliasedName,
+    false,
+    type: DriftSqlType.string,
+    requiredDuringInsert: true,
+  );
+  @override
+  List<GeneratedColumn> get $columns => [id];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'migration_receipts';
+  @override
+  VerificationContext validateIntegrity(
+    Insertable<MigrationReceipt> instance, {
+    bool isInserting = false,
+  }) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    } else if (isInserting) {
+      context.missing(_idMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  MigrationReceipt map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return MigrationReceipt(
+      id: attachedDatabase.typeMapping.read(
+        DriftSqlType.string,
+        data['${effectivePrefix}id'],
+      )!,
+    );
+  }
+
+  @override
+  $MigrationReceiptsTable createAlias(String alias) {
+    return $MigrationReceiptsTable(attachedDatabase, alias);
+  }
+}
+
+class MigrationReceipt extends DataClass
+    implements Insertable<MigrationReceipt> {
+  final String id;
+  const MigrationReceipt({required this.id});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<String>(id);
+    return map;
+  }
+
+  MigrationReceiptsCompanion toCompanion(bool nullToAbsent) {
+    return MigrationReceiptsCompanion(id: Value(id));
+  }
+
+  factory MigrationReceipt.fromJson(
+    Map<String, dynamic> json, {
+    ValueSerializer? serializer,
+  }) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return MigrationReceipt(id: serializer.fromJson<String>(json['id']));
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{'id': serializer.toJson<String>(id)};
+  }
+
+  MigrationReceipt copyWith({String? id}) =>
+      MigrationReceipt(id: id ?? this.id);
+  MigrationReceipt copyWithCompanion(MigrationReceiptsCompanion data) {
+    return MigrationReceipt(id: data.id.present ? data.id.value : this.id);
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MigrationReceipt(')
+          ..write('id: $id')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => id.hashCode;
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is MigrationReceipt && other.id == this.id);
+}
+
+class MigrationReceiptsCompanion extends UpdateCompanion<MigrationReceipt> {
+  final Value<String> id;
+  final Value<int> rowid;
+  const MigrationReceiptsCompanion({
+    this.id = const Value.absent(),
+    this.rowid = const Value.absent(),
+  });
+  MigrationReceiptsCompanion.insert({
+    required String id,
+    this.rowid = const Value.absent(),
+  }) : id = Value(id);
+  static Insertable<MigrationReceipt> custom({
+    Expression<String>? id,
+    Expression<int>? rowid,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (rowid != null) 'rowid': rowid,
+    });
+  }
+
+  MigrationReceiptsCompanion copyWith({Value<String>? id, Value<int>? rowid}) {
+    return MigrationReceiptsCompanion(
+      id: id ?? this.id,
+      rowid: rowid ?? this.rowid,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<String>(id.value);
+    }
+    if (rowid.present) {
+      map['rowid'] = Variable<int>(rowid.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('MigrationReceiptsCompanion(')
+          ..write('id: $id, ')
+          ..write('rowid: $rowid')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$ArticleDatabase extends GeneratedDatabase {
   _$ArticleDatabase(QueryExecutor e) : super(e);
   $ArticleDatabaseManager get managers => $ArticleDatabaseManager(this);
@@ -929,11 +1085,17 @@ abstract class _$ArticleDatabase extends GeneratedDatabase {
   late final $CustomTemplatesTable customTemplates = $CustomTemplatesTable(
     this,
   );
+  late final $MigrationReceiptsTable migrationReceipts =
+      $MigrationReceiptsTable(this);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities => [drafts, customTemplates];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+    drafts,
+    customTemplates,
+    migrationReceipts,
+  ];
 }
 
 typedef $$DraftsTableCreateCompanionBuilder = DraftsCompanion Function({
@@ -1430,6 +1592,138 @@ typedef $$CustomTemplatesTableProcessedTableManager =
       TemplateRow,
       PrefetchHooks Function()
     >;
+typedef $$MigrationReceiptsTableCreateCompanionBuilder =
+    MigrationReceiptsCompanion Function({required String id, Value<int> rowid});
+typedef $$MigrationReceiptsTableUpdateCompanionBuilder =
+    MigrationReceiptsCompanion Function({Value<String> id, Value<int> rowid});
+
+class $$MigrationReceiptsTableFilterComposer
+    extends Composer<_$ArticleDatabase, $MigrationReceiptsTable> {
+  $$MigrationReceiptsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+}
+
+class $$MigrationReceiptsTableOrderingComposer
+    extends Composer<_$ArticleDatabase, $MigrationReceiptsTable> {
+  $$MigrationReceiptsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<String> get id => $composableBuilder(
+    column: $table.id,
+    builder: (column) => ColumnOrderings(column),
+  );
+}
+
+class $$MigrationReceiptsTableAnnotationComposer
+    extends Composer<_$ArticleDatabase, $MigrationReceiptsTable> {
+  $$MigrationReceiptsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<String> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+}
+
+class $$MigrationReceiptsTableTableManager
+    extends
+        RootTableManager<
+          _$ArticleDatabase,
+          $MigrationReceiptsTable,
+          MigrationReceipt,
+          $$MigrationReceiptsTableFilterComposer,
+          $$MigrationReceiptsTableOrderingComposer,
+          $$MigrationReceiptsTableAnnotationComposer,
+          $$MigrationReceiptsTableCreateCompanionBuilder,
+          $$MigrationReceiptsTableUpdateCompanionBuilder,
+          (
+            MigrationReceipt,
+            BaseReferences<
+              _$ArticleDatabase,
+              $MigrationReceiptsTable,
+              MigrationReceipt
+            >,
+          ),
+          MigrationReceipt,
+          PrefetchHooks Function()
+        > {
+  $$MigrationReceiptsTableTableManager(
+    _$ArticleDatabase db,
+    $MigrationReceiptsTable table,
+  ) : super(
+        TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$MigrationReceiptsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$MigrationReceiptsTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$MigrationReceiptsTableAnnotationComposer(
+                $db: db,
+                $table: table,
+              ),
+          updateCompanionCallback: ({
+            Value<String> id = const Value.absent(),
+            Value<int> rowid = const Value.absent(),
+          }) => MigrationReceiptsCompanion(id: id, rowid: rowid),
+          createCompanionCallback: ({
+            required String id,
+            Value<int> rowid = const Value.absent(),
+          }) => MigrationReceiptsCompanion.insert(id: id, rowid: rowid),
+          withReferenceMapper: (p0) => p0
+              .map(
+                (e) => (
+                  e.readTable<$MigrationReceiptsTable, MigrationReceipt>(table),
+                  BaseReferences<
+                    _$ArticleDatabase,
+                    $MigrationReceiptsTable,
+                    MigrationReceipt
+                  >(db, table, e),
+                ),
+              )
+              .toList(),
+          prefetchHooksCallback: null,
+        ),
+      );
+}
+
+typedef $$MigrationReceiptsTableProcessedTableManager =
+    ProcessedTableManager<
+      _$ArticleDatabase,
+      $MigrationReceiptsTable,
+      MigrationReceipt,
+      $$MigrationReceiptsTableFilterComposer,
+      $$MigrationReceiptsTableOrderingComposer,
+      $$MigrationReceiptsTableAnnotationComposer,
+      $$MigrationReceiptsTableCreateCompanionBuilder,
+      $$MigrationReceiptsTableUpdateCompanionBuilder,
+      (
+        MigrationReceipt,
+        BaseReferences<
+          _$ArticleDatabase,
+          $MigrationReceiptsTable,
+          MigrationReceipt
+        >,
+      ),
+      MigrationReceipt,
+      PrefetchHooks Function()
+    >;
 
 class $ArticleDatabaseManager {
   final _$ArticleDatabase _db;
@@ -1438,4 +1732,6 @@ class $ArticleDatabaseManager {
       $$DraftsTableTableManager(_db, _db.drafts);
   $$CustomTemplatesTableTableManager get customTemplates =>
       $$CustomTemplatesTableTableManager(_db, _db.customTemplates);
+  $$MigrationReceiptsTableTableManager get migrationReceipts =>
+      $$MigrationReceiptsTableTableManager(_db, _db.migrationReceipts);
 }

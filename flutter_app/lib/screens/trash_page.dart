@@ -99,9 +99,13 @@ class _TrashPageState extends State<TrashPage> {
         }
         return Column(
           children: [
-            const Padding(
+            Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, 12),
-              child: Text('ゴミ箱に移してから30日を過ぎた記事は、ゴミ箱を開いたときに削除されます。'),
+              child: Text(
+                widget.database.autoRemovesExpiredTrash
+                    ? 'ゴミ箱に移してから30日を過ぎた記事は、ゴミ箱を開いたときに削除されます。'
+                    : 'ゴミ箱の記事の自動削除は停止中です。',
+              ),
             ),
             Expanded(
               child: ListView.separated(
