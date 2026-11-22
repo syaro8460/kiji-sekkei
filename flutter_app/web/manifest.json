@@ -1,11 +1,11 @@
 {
-    "name": "flutter_app",
-    "short_name": "flutter_app",
+    "name": "記事設計",
+    "short_name": "記事設計",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#FDFFFE",
+    "theme_color": "#FDFFFE",
+    "description": "記事を書く前のアイデアや構成を整理できます。",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [
