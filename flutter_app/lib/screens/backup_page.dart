@@ -4,6 +4,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
+import '../models/backup_manager.dart';
 import '../storage/article_database.dart';
 import 'content_page_frame.dart';
 
@@ -61,11 +62,12 @@ class _BackupPageState extends State<BackupPage> {
       final bytes = await widget.pickBackup();
       if (!mounted || bytes == null) return;
 
+      final backup = BackupManager().decode(bytes);
       final confirmed = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('バックアップを復元しますか？'),
-          content: const Text('現在の記事（ゴミ箱を含む）とカスタムテンプレートが、ファイルの内容に置き換わります。'),
+          content: const Text('現在の記事とテンプレートはバックアップの内容で上書きされます。'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -73,7 +75,7 @@ class _BackupPageState extends State<BackupPage> {
             ),
             FilledButton(
               onPressed: () => Navigator.pop(context, true),
-              child: const Text('置き換えて復元'),
+              child: const Text('復元する'),
             ),
           ],
         ),
@@ -81,7 +83,7 @@ class _BackupPageState extends State<BackupPage> {
       if (!mounted || confirmed != true) return;
 
       setState(() => _restoring = true);
-      await widget.database.restoreBackup(bytes);
+      await widget.database.restoreBackupData(backup);
       if (!mounted) return;
       Navigator.pop(context, true);
     } on FormatException {
@@ -114,7 +116,7 @@ class _BackupPageState extends State<BackupPage> {
                 vertical: 12,
               ),
               leading: const Icon(Icons.file_download_outlined),
-              title: const Text('JSONを書き出す'),
+              title: const Text('バックアップを書き出す'),
               subtitle: const Text('記事とカスタムテンプレートをファイルに保存'),
               trailing: const Icon(Icons.chevron_right),
               onTap: _export,
@@ -129,7 +131,7 @@ class _BackupPageState extends State<BackupPage> {
                 vertical: 12,
               ),
               leading: const Icon(Icons.file_upload_outlined),
-              title: const Text('バックアップから復元'),
+              title: const Text('バックアップを読み込む'),
               subtitle: const Text('保存したJSONファイルを選択'),
               trailing: const Icon(Icons.chevron_right),
               onTap: _import,

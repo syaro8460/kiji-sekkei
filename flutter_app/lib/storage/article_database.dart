@@ -200,7 +200,10 @@ class ArticleDatabase extends _$ArticleDatabase {
   }
 
   Future<void> restoreBackup(List<int> bytes) async {
-    final backup = BackupManager().decode(bytes);
+    await restoreBackupData(BackupManager().decode(bytes));
+  }
+
+  Future<void> restoreBackupData(BackupData backup) async {
     final draftRows = backup.drafts.map(_draftRow).toList();
     final templateRows = [
       for (final (position, template) in backup.templates.indexed)

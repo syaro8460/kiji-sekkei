@@ -67,15 +67,15 @@ void main() {
     }
 
     await tap('開く');
-    await tap('JSONを書き出す');
+    await tap('バックアップを書き出す');
     expect(BackupManager().decode(exported!).drafts.single.title, '現在の記事');
 
-    await tap('バックアップから復元');
+    await tap('バックアップを読み込む');
     expect(find.text('バックアップを復元しますか？'), findsNothing);
 
     file = Uint8List.fromList([1, 2, 3]);
-    await tap('バックアップから復元', dialog: true);
-    await tap('置き換えて復元');
+    await tap('バックアップを読み込む');
+    expect(find.text('バックアップを復元しますか？'), findsNothing);
     expect(find.text('対応するJSONバックアップを選んでください。'), findsOneWidget);
 
     final incoming = ArticleDraft(
@@ -92,15 +92,15 @@ void main() {
         templates: [],
       ),
     );
-    await tap('バックアップから復元', dialog: true);
+    await tap('バックアップを読み込む', dialog: true);
     await tap('キャンセル');
     final afterCancel = await tester.runAsync(
       () => database.listDrafts(DraftStatus.active),
     );
     expect(afterCancel!.single.title, '現在の記事');
 
-    await tap('バックアップから復元', dialog: true);
-    await tap('置き換えて復元');
+    await tap('バックアップを読み込む', dialog: true);
+    await tap('復元する');
     expect(restored, isTrue);
     final afterRestore = await tester.runAsync(
       () => database.listDrafts(DraftStatus.active),

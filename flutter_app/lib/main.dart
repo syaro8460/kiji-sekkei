@@ -239,7 +239,7 @@ class _ArticleListState extends State<_ArticleList> {
     if (!mounted || restored != true) return;
     _reload();
     ScaffoldMessenger.of(context)
-        .showSnackBar(const SnackBar(content: Text('バックアップを復元しました。')));
+        .showSnackBar(const SnackBar(content: Text('バックアップを読み込みました。')));
   }
 
   Future<void> _openTrash() async {
