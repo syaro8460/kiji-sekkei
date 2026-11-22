@@ -8,12 +8,14 @@ class ContentPageFrame extends StatelessWidget {
     required this.body,
     this.actions = const [],
     this.bottomAction,
+    this.showBackButton = true,
   });
 
   final String title;
   final Widget body;
   final List<Widget> actions;
   final Widget? bottomAction;
+  final bool showBackButton;
 
   static const contentWidth = 800.0;
 
@@ -33,7 +35,9 @@ class ContentPageFrame extends StatelessWidget {
       final gutter = constraints.maxWidth > contentWidth
           ? (constraints.maxWidth - contentWidth) / 2
           : 0.0;
-      final canGoBack = ModalRoute.of(context)?.impliesAppBarDismissal ?? false;
+      final canGoBack =
+          showBackButton &&
+          (ModalRoute.of(context)?.impliesAppBarDismissal ?? false);
       final action = bottomAction;
       return Scaffold(
         backgroundColor: colors.surfaceContainerLow,

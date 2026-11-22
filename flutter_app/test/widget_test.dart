@@ -29,7 +29,22 @@ void main() {
     await tester.tap(find.text('新しい記事'));
     await tester.pumpAndSettle();
     final template = ArticleTemplate.builtInTemplates.first;
-    await tester.tap(find.text(template.name));
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '作成'))
+          .onPressed,
+      isNull,
+    );
+    expect(find.text(template.questions.first), findsOneWidget);
+    await tester.enterText(find.byType(TextField).first, 'キャンセルする記事');
+    await tester.tap(find.text('キャンセル'));
+    await tester.pumpAndSettle();
+    expect(find.text('記事はまだありません'), findsOneWidget);
+    await tester.tap(find.text('新しい記事'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField).first, '最初の記事');
+    await tester.pump();
+    await tester.tap(find.text('作成'));
     await tester.pumpAndSettle();
 
     final title = find.byType(TextFormField).first;
@@ -164,9 +179,12 @@ void main() {
     await fill('週次レビュー', '気づき\n次にやること');
     await tap(find.byTooltip('戻る'));
     await tap(find.text('新しい記事'));
-    await tap(find.text('週次レビュー'));
+    await tap(find.text(ArticleTemplate.builtInTemplates.first.name));
+    await tap(find.text('週次レビュー').last);
     expect(find.text('次にやること'), findsOneWidget);
-    await tester.enterText(find.byType(TextFormField).first, '今週の記事');
+    await tester.enterText(find.byType(TextField).first, '今週の記事');
+    await tester.pump();
+    await tap(find.text('作成'));
     await tap(find.byTooltip('戻る'));
 
     await tap(find.byTooltip('テンプレート管理'));

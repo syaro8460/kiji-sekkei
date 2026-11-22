@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
-import 'package:flutter/foundation.dart' show kIsWeb, listEquals;
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -15,6 +15,7 @@ import 'screens/content_page_frame.dart';
 import 'screens/article_preview_page.dart';
 import 'screens/article_questions_page.dart';
 import 'screens/backup_page.dart';
+import 'screens/new_article_page.dart';
 import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
@@ -257,48 +258,23 @@ class _ArticleListState extends State<_ArticleList> {
           .showSnackBar(const SnackBar(content: Text('テンプレートを読み込めませんでした。')));
       return;
     }
-    if (!mounted) return;
-
-    final template = await showModalBottomSheet<ArticleTemplate>(
-      context: context,
-      builder: (context) => SafeArea(
-        child: ListView(
-          shrinkWrap: true,
-          children: [
-            const ListTile(title: Text('テンプレートを選ぶ')),
-            for (final template in [
-              ...ArticleTemplate.builtInTemplates,
-              ...customTemplates,
-            ])
-              ListTile(
-                leading: const Icon(Icons.description_outlined),
-                title: Text(template.name),
-                onTap: () => Navigator.pop(context, template),
-              ),
-          ],
+    if (!mounted || ModalRoute.of(context)?.isCurrent != true) return;
+    final draft = await Navigator.of(context).push<ArticleDraft>(
+      MaterialPageRoute(
+        builder: (context) => NewArticlePage(
+          database: widget.database,
+          templates: [...ArticleTemplate.builtInTemplates, ...customTemplates],
         ),
       ),
     );
-    if (!mounted || template == null) return;
-    await _openEditor(
-      ArticleDraft(
-        id: newUuid(),
-        title: '',
-        articleType: template.name,
-        questions: List.of(template.questions),
-      ),
-      isNew: true,
-    );
+    if (mounted && draft != null) await _openEditor(draft);
   }
 
-  Future<void> _openEditor(ArticleDraft draft, {bool isNew = false}) async {
+  Future<void> _openEditor(ArticleDraft draft) async {
     await Navigator.of(context).push<void>(
       MaterialPageRoute(
-        builder: (context) => _ArticleEditor(
-          database: widget.database,
-          draft: draft,
-          isNew: isNew,
-        ),
+        builder: (context) =>
+            _ArticleEditor(database: widget.database, draft: draft),
       ),
     );
     if (mounted) _reload();
@@ -588,15 +564,10 @@ class _ArticleListState extends State<_ArticleList> {
 }
 
 class _ArticleEditor extends StatefulWidget {
-  const _ArticleEditor({
-    required this.database,
-    required this.draft,
-    required this.isNew,
-  });
+  const _ArticleEditor({required this.database, required this.draft});
 
   final ArticleDatabase database;
   final ArticleDraft draft;
-  final bool isNew;
 
   @override
   State<_ArticleEditor> createState() => _ArticleEditorState();
@@ -621,7 +592,6 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   bool _saveFailed = false;
   bool _closingEditor = false;
   bool _exporting = false;
-  late bool _hasSaved = !widget.isNew;
 
   @override
   void dispose() {
@@ -740,17 +710,6 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   }
 
   void _queueSave() {
-    // Opening a new editor and leaving it empty shouldn't create a draft.
-    if (!_hasSaved &&
-        _saving == null &&
-        _pendingDraft == null &&
-        _title.text.trim().isEmpty &&
-        _tags.isEmpty &&
-        _answers.values.every((answer) => answer.text.trim().isEmpty) &&
-        _articleType == widget.draft.articleType &&
-        listEquals(_questions, widget.draft.questions)) {
-      return;
-    }
     _pendingDraft = _currentDraft();
     unawaited(_savePending());
   }
@@ -778,7 +737,6 @@ class _ArticleEditorState extends State<_ArticleEditor> {
       _pendingDraft = null;
       try {
         await widget.database.saveDraft(draft);
-        _hasSaved = true;
       } catch (_) {
         _pendingDraft ??= draft;
         _saveFailed = true;
@@ -872,11 +830,11 @@ class _ArticleEditorState extends State<_ArticleEditor> {
         if (!didPop) unawaited(_closeEditor());
       },
       child: ContentPageFrame(
-        title: widget.isNew ? '新しい記事' : '記事の内容',
+        title: '記事の内容',
         actions: [
           if (_saveFailed)
             TextButton(onPressed: _savePending, child: const Text('保存を再試行'))
-          else if (_saving != null || _hasSaved)
+          else
             Center(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 8),
