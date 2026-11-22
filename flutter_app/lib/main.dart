@@ -503,7 +503,7 @@ class _ArticleListState extends State<_ArticleList> {
             : FloatingActionButton.extended(
                 onPressed: _newArticle,
                 icon: const Icon(Icons.add),
-                label: const Text('新しい記事'),
+                label: const Text('新しい記事を作成'),
               ),
         body: SafeArea(
           bottom: false,
@@ -534,7 +534,7 @@ class _ArticleListState extends State<_ArticleList> {
                           FilledButton.icon(
                             onPressed: _newArticle,
                             icon: const Icon(Icons.add),
-                            label: const Text('新しい記事'),
+                            label: const Text('新しい記事を作成'),
                           ),
                         ],
                       ),

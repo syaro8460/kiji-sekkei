@@ -26,7 +26,7 @@ void main() {
     expect(Localizations.localeOf(listContext), const Locale('ja', 'JP'));
     expect(MaterialLocalizations.of(listContext).backButtonTooltip, '戻る');
 
-    await tester.tap(find.text('新しい記事'));
+    await tester.tap(find.text('新しい記事を作成'));
     await tester.pumpAndSettle();
     final template = ArticleTemplate.builtInTemplates.first;
     expect(
@@ -40,7 +40,7 @@ void main() {
     await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
     expect(find.text('まだ記事がありません'), findsOneWidget);
-    await tester.tap(find.text('新しい記事'));
+    await tester.tap(find.text('新しい記事を作成'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '最初の記事');
     await tester.pump();
@@ -179,7 +179,7 @@ void main() {
     await tap(find.text('ふりかえり'));
     await fill('週次レビュー', '気づき\n次にやること');
     await tap(find.byTooltip('戻る'));
-    await tap(find.text('新しい記事'));
+    await tap(find.text('新しい記事を作成'));
     await tap(find.text(ArticleTemplate.builtInTemplates.first.name));
     await tap(find.text('週次レビュー').last);
     expect(find.text('次にやること'), findsOneWidget);
@@ -523,7 +523,7 @@ void main() {
     expect(tester.getSize(search).width, lessThan(960));
     expect(
       find.ancestor(
-        of: find.text('新しい記事'),
+        of: find.text('新しい記事を作成'),
         matching: find.byWidgetPredicate((widget) => widget is FilledButton),
       ),
       findsOneWidget,
