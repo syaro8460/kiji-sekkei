@@ -340,14 +340,6 @@ class _ArticleListState extends State<_ArticleList> {
               tooltip: '記事の操作',
               itemBuilder: (_) => [
                 PopupMenuItem(
-                  onTap: () => Navigator.of(context).push<void>(
-                    MaterialPageRoute(
-                      builder: (context) => ArticlePreviewPage(draft: draft),
-                    ),
-                  ),
-                  child: const Text('プレビュー'),
-                ),
-                PopupMenuItem(
                   onTap: () => _duplicateDraft(draft),
                   child: const Text('複製'),
                 ),

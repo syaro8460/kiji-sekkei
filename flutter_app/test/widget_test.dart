@@ -111,6 +111,7 @@ void main() {
 
     Future<void> moveToTrash() async {
       await tap(find.byTooltip('記事の操作'));
+      expect(find.text('プレビュー'), findsNothing);
       await tap(find.text('ゴミ箱に移動'));
       expect(find.text('記事はまだありません'), findsOneWidget);
       await tap(find.byTooltip('ゴミ箱'));
