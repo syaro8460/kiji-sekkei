@@ -255,8 +255,8 @@ void main() {
       await tap(find.byTooltip('検索をクリア'));
       expect(find.text('別の記事'), findsOneWidget);
 
-      final search = find.widgetWithText(TextField, '記事を検索');
-      await tester.enterText(search, 'RELEASE ふりかえり');
+      final search = find.widgetWithText(TextField, '検索');
+      await tester.enterText(search, 'ＲＥＬＥＡＳＥ　フリカエリ');
       await tester.pumpAndSettle();
       expect(find.text('Release Notes'), findsOneWidget);
       expect(find.text('別の記事'), findsNothing);
@@ -338,7 +338,7 @@ void main() {
     expect(appearsBefore(newTitle, oldTitle), isTrue);
     await chooseOrder('タイトル（昇順）');
 
-    final search = find.widgetWithText(TextField, '記事を検索');
+    final search = find.widgetWithText(TextField, '検索');
     await tester.enterText(search, '古い');
     await tester.pumpAndSettle();
     expect(find.text('検索結果：1件'), findsOneWidget);
@@ -517,7 +517,7 @@ void main() {
     await tester.pumpWidget(MyApp(database: database));
     await tester.pumpAndSettle();
 
-    final search = find.widgetWithText(TextField, '記事を検索');
+    final search = find.widgetWithText(TextField, '検索');
     expect(find.text('記事一覧'), findsOneWidget);
     expect(tester.getCenter(search).dx, closeTo(720, 1));
     expect(tester.getSize(search).width, lessThan(960));

@@ -151,8 +151,22 @@ class _ArticleListState extends State<_ArticleList> {
     setState(() {});
   }
 
+  String _normalizeSearch(String text) {
+    return String.fromCharCodes(
+      text.runes.map((character) {
+        if (character >= 0xff01 && character <= 0xff5e) {
+          return character - 0xfee0; // Full-width ASCII.
+        }
+        if (character >= 0x3041 && character <= 0x3096) {
+          return character + 0x60; // Hiragana to katakana.
+        }
+        return character == 0x3000 ? 0x20 : character;
+      }),
+    ).toLowerCase();
+  }
+
   List<ArticleDraft> _filterDrafts(List<ArticleDraft> drafts) {
-    final query = _search.text.trim().toLowerCase();
+    final query = _normalizeSearch(_search.text).trim();
     if (query.isEmpty) return drafts;
     final keywords = query.split(RegExp(r'\s+'));
     return drafts.where((draft) {
@@ -162,7 +176,7 @@ class _ArticleListState extends State<_ArticleList> {
         ...draft.questions,
         ...draft.answers.values,
         ...draft.tags,
-      ].map((field) => field.toLowerCase()).toList();
+      ].map(_normalizeSearch).toList();
       return keywords.every(
         (word) => fields.any((field) => field.contains(word)),
       );
@@ -545,7 +559,7 @@ class _ArticleListState extends State<_ArticleList> {
                       onChanged: (_) => setState(() {}),
                       textInputAction: TextInputAction.search,
                       decoration: InputDecoration(
-                        labelText: '記事を検索',
+                        labelText: '検索',
                         prefixIcon: const Icon(Icons.search),
                         filled: true,
                         fillColor: colors.surface,
