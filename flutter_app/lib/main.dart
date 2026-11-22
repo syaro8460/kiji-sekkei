@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
@@ -165,6 +166,30 @@ class _ArticleListState extends State<_ArticleList> {
     ).toLowerCase();
   }
 
+  bool _containsSearchKeyword(String field, String keyword) {
+    if (field.contains(keyword)) return true;
+
+    final characters = keyword.runes.toList();
+    if (characters.length < 3) return false;
+
+    final allowedDistance = characters.length ~/ 3;
+    final distances = List.generate(characters.length + 1, (index) => index);
+    for (final targetCharacter in field.runes) {
+      var diagonal = distances[0];
+      for (var index = 1; index < distances.length; index++) {
+        final previous = distances[index];
+        final insertion = distances[index - 1] + 1;
+        final deletion = previous + 1;
+        final substitution =
+            diagonal + (targetCharacter == characters[index - 1] ? 0 : 1);
+        distances[index] = min(min(insertion, deletion), substitution);
+        diagonal = previous;
+      }
+      if (distances.last <= allowedDistance) return true;
+    }
+    return false;
+  }
+
   List<ArticleDraft> _filterDrafts(List<ArticleDraft> drafts) {
     final query = _normalizeSearch(_search.text).trim();
     if (query.isEmpty) return drafts;
@@ -178,7 +203,7 @@ class _ArticleListState extends State<_ArticleList> {
         ...draft.tags,
       ].map(_normalizeSearch).toList();
       return keywords.every(
-        (word) => fields.any((field) => field.contains(word)),
+        (word) => fields.any((field) => _containsSearchKeyword(field, word)),
       );
     }).toList();
   }

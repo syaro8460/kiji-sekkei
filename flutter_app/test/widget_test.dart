@@ -260,6 +260,10 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Release Notes'), findsOneWidget);
       expect(find.text('別の記事'), findsNothing);
+      await tester.enterText(search, 'releze ふりかえり');
+      await tester.pumpAndSettle();
+      expect(find.text('Release Notes'), findsOneWidget);
+      expect(find.text('別の記事'), findsNothing);
       await tester.enterText(search, '見つからない検索');
       await tester.pumpAndSettle();
       expect(find.text('検索結果がありません'), findsOneWidget);
