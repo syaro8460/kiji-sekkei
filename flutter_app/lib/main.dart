@@ -408,8 +408,32 @@ class _ArticleListState extends State<_ArticleList> {
               Expanded(
                 child: drafts.isEmpty
                     ? Center(
-                        child: Text(
-                          searching ? '条件に一致する記事はありません' : '記事はまだありません',
+                        child: SingleChildScrollView(
+                          padding: const EdgeInsets.all(24),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                searching
+                                    ? Icons.search
+                                    : Icons.description_outlined,
+                              ),
+                              const SizedBox(height: 12),
+                              Text(
+                                searching ? '検索結果がありません' : 'まだ記事がありません',
+                                style: Theme.of(context).textTheme.titleLarge,
+                                textAlign: TextAlign.center,
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                searching
+                                    ? '別のキーワードで検索してみてください。'
+                                    : '記事を書く前のアイデアや構成を整理できます。\n'
+                                          '最初の記事を作成してみましょう。',
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
                         ),
                       )
                     : _buildDraftList(drafts, wide: wide),

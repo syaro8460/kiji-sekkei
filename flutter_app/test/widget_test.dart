@@ -21,7 +21,7 @@ void main() {
     await tester.runAsync(() => database.listDrafts(DraftStatus.active));
     await tester.pumpWidget(MyApp(database: database));
     await tester.pumpAndSettle();
-    expect(find.text('記事はまだありません'), findsOneWidget);
+    expect(find.text('まだ記事がありません'), findsOneWidget);
     final listContext = tester.element(find.text('記事設計'));
     expect(Localizations.localeOf(listContext), const Locale('ja', 'JP'));
     expect(MaterialLocalizations.of(listContext).backButtonTooltip, '戻る');
@@ -39,7 +39,7 @@ void main() {
     await tester.enterText(find.byType(TextField).first, 'キャンセルする記事');
     await tester.tap(find.text('キャンセル'));
     await tester.pumpAndSettle();
-    expect(find.text('記事はまだありません'), findsOneWidget);
+    expect(find.text('まだ記事がありません'), findsOneWidget);
     await tester.tap(find.text('新しい記事'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, '最初の記事');
@@ -113,7 +113,7 @@ void main() {
       await tap(find.byTooltip('記事の操作'));
       expect(find.text('プレビュー'), findsNothing);
       await tap(find.text('ゴミ箱に移動'));
-      expect(find.text('記事はまだありません'), findsOneWidget);
+      expect(find.text('まだ記事がありません'), findsOneWidget);
       await tap(find.byTooltip('ゴミ箱'));
       expect(find.text('保存した記事'), findsOneWidget);
       expect(find.text('期限切れの記事'), findsNothing);
@@ -262,7 +262,8 @@ void main() {
       expect(find.text('別の記事'), findsNothing);
       await tester.enterText(search, '見つからない検索');
       await tester.pumpAndSettle();
-      expect(find.text('条件に一致する記事はありません'), findsOneWidget);
+      expect(find.text('検索結果がありません'), findsOneWidget);
+      expect(find.text('別のキーワードで検索してみてください。'), findsOneWidget);
       await tap(find.byTooltip('検索をクリア'));
 
       await tap(find.text('Release Notes'));
