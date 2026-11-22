@@ -45,3 +45,12 @@ Web版を配信する場合は `flutter build web` で作成する `build/web` �
 通常の `flutter run`（Debug）と Profile ビルドは開発用アイコンを使用します。開発版はアプリ識別子の末尾に `.dev` が付き、リリース版と同じ端末にインストールできます。Release ビルドは従来の識別子と正式アイコンを使用します。
 
 両版のローカルデータは独立しています。以前の開発ビルドで保存したデータは従来の識別子側に残ります。新しい開発版に必要なデータは、JSONバックアップで移せます。
+## Firebase同期の開発環境
+
+Firebase CLI と Java を用意し、`flutter_app` で以下を実行すると、認証と Firestore のルールをローカルで確認できます。
+
+```sh
+firebase emulators:exec --only auth,firestore --project demo-kiji-sekkei "node tool/test_firestore_rules.mjs"
+```
+
+検証用のデータは、エミュレーター内に作るテストユーザーのものです。Firestore はユーザーごとに記事とカスタムテンプレートを分け、更新番号を照合します。削除はマーカーで伝えます。現在のアプリはローカル保存を使用しており、Firebaseへの接続と実データの同期はまだ組み込んでいません。

@@ -1,0 +1,34 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validRecord(recordId) {
+      let record = request.resource.data;
+      let fields = ['revision', 'updatedAt', 'deleted', 'payload'];
+      return recordId.matches('^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+        && record.keys().hasAll(fields) && record.keys().hasOnly(fields)
+        && record.revision is int
+        && record.updatedAt == request.time
+        && record.deleted is bool
+        && ((record.deleted && record.payload == null)
+          || (!record.deleted && record.payload is map));
+    }
+
+    // Retain deletion markers so an offline client can learn about deletions.
+    match /users/{uid}/{collection}/{recordId} {
+      function isSyncCollection() {
+        return collection in ['drafts', 'templates'];
+      }
+
+      allow read: if isOwner(uid) && isSyncCollection();
+      allow create: if isOwner(uid) && isSyncCollection()
+        && validRecord(recordId) && request.resource.data.revision == 1;
+      allow update: if isOwner(uid) && isSyncCollection()
+        && validRecord(recordId)
+        && request.resource.data.revision == resource.data.revision + 1;
+    }
+  }
+}
