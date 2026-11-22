@@ -4,6 +4,9 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:material_ui/material_ui.dart';
 
+import 'models/article_draft.dart';
+import 'storage/firestore_draft_store.dart';
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   try {
@@ -69,12 +72,8 @@ class _DemoAppState extends State<_DemoApp> {
                 if (user == null) return _SignIn(auth: widget.auth);
                 return _TestArticle(
                   key: ValueKey(user.uid),
-                  auth: widget.auth,
-                  record: widget.firestore
-                      .collection('users')
-                      .doc(user.uid)
-                      .collection('drafts')
-                      .doc('5d35cccd-ff13-4bbe-a4e0-3effabff9b75'),
+                  onSignOut: widget.auth.signOut,
+                  drafts: FirestoreDraftStore(widget.firestore, uid: user.uid),
                 );
               },
             ),
@@ -179,10 +178,14 @@ class _SignInState extends State<_SignIn> {
 }
 
 class _TestArticle extends StatefulWidget {
-  const _TestArticle({super.key, required this.auth, required this.record});
+  const _TestArticle({
+    super.key,
+    required this.onSignOut,
+    required this.drafts,
+  });
 
-  final FirebaseAuth auth;
-  final DocumentReference<Map<String, dynamic>> record;
+  final Future<void> Function() onSignOut;
+  final FirestoreDraftStore drafts;
 
   @override
   State<_TestArticle> createState() => _TestArticleState();
@@ -190,13 +193,17 @@ class _TestArticle extends StatefulWidget {
 
 class _TestArticleState extends State<_TestArticle> {
   final _title = TextEditingController();
-  late final _record = widget.record.snapshots();
+  static const _draftId = '5d35cccd-ff13-4bbe-a4e0-3effabff9b75';
+  static const _question = '記事のメモ';
+  final _answer = TextEditingController();
+  late final _record = widget.drafts.watchDraft(_draftId);
   bool _saving = false;
   String? _message;
 
   @override
   void dispose() {
     _title.dispose();
+    _answer.dispose();
     super.dispose();
   }
 
@@ -208,18 +215,17 @@ class _TestArticleState extends State<_TestArticle> {
       _message = null;
     });
     try {
-      final saved = await widget.record.firestore.runTransaction((tx) async {
-        final existing = await tx.get(widget.record);
-        final revision = existing.data()?['revision'] as int? ?? 0;
-        if (revision != expectedRevision) return false;
-        tx.set(widget.record, {
-          'revision': revision + 1,
-          'updatedAt': FieldValue.serverTimestamp(),
-          'deleted': false,
-          'payload': {'title': title},
-        });
-        return true;
-      });
+      final answer = _answer.text.trim();
+      final saved = await widget.drafts.saveDraft(
+        ArticleDraft(
+          id: _draftId,
+          title: title,
+          articleType: '日記',
+          questions: const [_question],
+          answers: answer.isEmpty ? {} : {_question: answer},
+        ),
+        expectedRevision: expectedRevision,
+      );
       if (!mounted) return;
       setState(() {
         _message = saved ? 'テスト記事を同期しました。' : '別の端末で更新されました。同期済みのタイトルを確認してください。';
@@ -233,12 +239,11 @@ class _TestArticleState extends State<_TestArticle> {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+    return StreamBuilder<SyncedDraft>(
       stream: _record,
       builder: (context, snapshot) {
-        final record = snapshot.data?.data();
-        final payload = record?['payload'] as Map<String, dynamic>?;
-        final revision = record?['revision'] as int? ?? 0;
+        final synced = snapshot.data;
+        final draft = synced?.draft;
         return ListView(
           padding: const EdgeInsets.all(24),
           children: [
@@ -248,21 +253,27 @@ class _TestArticleState extends State<_TestArticle> {
             else if (!snapshot.hasData)
               const LinearProgressIndicator()
             else
-              Text(payload?['title'] as String? ?? 'テスト記事はまだありません'),
+              Text(draft?.title ?? 'テスト記事はまだありません'),
+            if (draft?.answers[_question] case final answer?) Text(answer),
             TextField(
               controller: _title,
               decoration: const InputDecoration(labelText: 'テスト記事のタイトル'),
               maxLength: 100,
             ),
+            TextField(
+              controller: _answer,
+              decoration: const InputDecoration(labelText: 'テスト記事のメモ'),
+              maxLength: 300,
+            ),
             FilledButton(
               onPressed: _saving || !snapshot.hasData
                   ? null
-                  : () => _save(revision),
+                  : () => _save(synced!.revision),
               child: const Text('テスト記事を同期'),
             ),
             if (_message case final message?) Text(message),
             TextButton(
-              onPressed: _saving ? null : widget.auth.signOut,
+              onPressed: _saving ? null : widget.onSignOut,
               child: const Text('ログアウト'),
             ),
           ],

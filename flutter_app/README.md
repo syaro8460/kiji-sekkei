@@ -68,4 +68,4 @@ flutter run -d chrome --web-port 8083 --target lib/firebase_sync_demo.dart
 flutter run -d emulator-5554 --target lib/firebase_sync_demo.dart
 ```
 
-片方でテストアカウントを作成し、もう片方で同じアカウントにログインします。「テスト記事を同期」を押すと、相手の画面のタイトルが更新されます。この画面が扱うのはテストアカウントごとに1件のテスト記事です。通常のアプリに戻るには、ターゲットを指定せず `flutter run` します。
+片方でテストアカウントを作成し、もう片方で同じアカウントにログインします。「テスト記事を同期」を押すと、相手の画面のタイトルとメモが更新されます。同期先はログイン方法に依存せず、Firebase AuthenticationのユーザーIDで分かれます。この画面が扱うのはテストアカウントごとに1件のテスト記事です。通常のアプリに戻るには、ターゲットを指定せず `flutter run` します。
