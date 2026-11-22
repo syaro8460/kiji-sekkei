@@ -29,7 +29,16 @@ android {
         versionName = flutter.versionName
     }
 
+    sourceSets.named("profile") {
+        res.srcDir("src/debug/res")
+    }
+
     buildTypes {
+        configureEach {
+            if (name == "debug" || name == "profile") {
+                applicationIdSuffix = ".dev"
+            }
+        }
         release {
             // TODO: Add your own signing config for the release build.
             // Signing with the debug keys for now, so `flutter run --release` works.

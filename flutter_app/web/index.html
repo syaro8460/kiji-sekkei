@@ -58,6 +58,17 @@
     <img src="icons/Icon-192.png" width="96" height="96" alt="">
   </div>
   <script>
+    const localDevelopment = ['127.0.0.1', 'localhost'].includes(location.hostname)
+      && location.port === '8081';
+    if (localDevelopment) {
+      const devIcon = 'icons/Dev-192.png';
+      document.title = '記事設計 Dev';
+      document.querySelector('meta[name="apple-mobile-web-app-title"]').content = document.title;
+      document.querySelector('link[rel="apple-touch-icon"]').href = devIcon;
+      document.querySelector('link[rel="icon"]').href = devIcon;
+      document.querySelector('link[rel="manifest"]').href = 'manifest-dev.json';
+      document.querySelector('#startup img').src = devIcon;
+    }
     window.addEventListener('flutter-first-frame', () => {
       document.getElementById('startup').remove();
     }, { once: true });

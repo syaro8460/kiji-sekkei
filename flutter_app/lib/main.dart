@@ -44,7 +44,12 @@ class _MyAppState extends State<MyApp> {
 
   @override
   Widget build(BuildContext context) => MaterialApp(
-    title: '記事設計',
+    title:
+        kIsWeb &&
+            const {'127.0.0.1', 'localhost'}.contains(Uri.base.host) &&
+            Uri.base.port == 8081
+        ? '記事設計 Dev'
+        : '記事設計',
     locale: const Locale('ja', 'JP'),
     supportedLocales: const [Locale('ja', 'JP')],
     localizationsDelegates: GlobalMaterialLocalizations.delegates,
