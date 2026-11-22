@@ -53,4 +53,19 @@ Firebase CLI と Java を用意し、`flutter_app` で以下を実行すると�
 firebase emulators:exec --only auth,firestore --project demo-kiji-sekkei "node tool/test_firestore_rules.mjs"
 ```
 
-検証用のデータは、エミュレーター内に作るテストユーザーのものです。Firestore はユーザーごとに記事とカスタムテンプレートを分け、更新番号を照合します。削除はマーカーで伝えます。現在のアプリはローカル保存を使用しており、Firebaseへの接続と実データの同期はまだ組み込んでいません。
+検証用のデータは、エミュレーター内に作るテストユーザーのものです。Firestore はユーザーごとに記事とカスタムテンプレートを分け、更新番号を照合します。削除はマーカーで伝えます。通常のアプリは引き続きローカル保存を使用します。
+
+テスト用の記事を端末間で同期する場合は、別のターミナルでローカル環境を起動します。
+
+```sh
+firebase emulators:start --only auth,firestore --project demo-kiji-sekkei
+```
+
+Flutterの通常の起動先とは別に用意したテスト画面を起動します。
+
+```sh
+flutter run -d chrome --web-port 8083 --target lib/firebase_sync_demo.dart
+flutter run -d emulator-5554 --target lib/firebase_sync_demo.dart
+```
+
+片方でテストアカウントを作成し、もう片方で同じアカウントにログインします。「テスト記事を同期」を押すと、相手の画面のタイトルが更新されます。この画面が扱うのはテストアカウントごとに1件のテスト記事です。通常のアプリに戻るには、ターゲットを指定せず `flutter run` します。
