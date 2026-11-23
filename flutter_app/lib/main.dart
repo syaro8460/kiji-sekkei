@@ -377,6 +377,32 @@ class _ArticleListState extends State<_ArticleList> {
     if (mounted) _reload();
   }
 
+  IconData _draftIcon(String articleType) {
+    final templates = ArticleTemplate.builtInTemplates.where(
+      (template) => template.name == articleType,
+    );
+    final iconName = templates.isEmpty ? null : templates.first.iconName;
+    return switch (iconName) {
+      'star.bubble' => Icons.rate_review_outlined,
+      'arrow.left.arrow.right' => Icons.compare_arrows,
+      'person.text.rectangle' => Icons.person_outline,
+      'xmark.circle' => Icons.cancel_outlined,
+      _ => Icons.description_outlined,
+    };
+  }
+
+  String _formatUpdatedAt(DateTime updatedAt) {
+    final local = updatedAt.toLocal();
+    final date =
+        '${local.year.toString().padLeft(4, '0')}/'
+        '${local.month.toString().padLeft(2, '0')}/'
+        '${local.day.toString().padLeft(2, '0')}';
+    final time =
+        '${local.hour.toString().padLeft(2, '0')}:'
+        '${local.minute.toString().padLeft(2, '0')}';
+    return '$date $time';
+  }
+
   Widget _buildDraftList(List<ArticleDraft> drafts, {required bool wide}) {
     return ListView.separated(
       padding: EdgeInsets.only(bottom: wide ? 28 : 88),
@@ -408,26 +434,62 @@ class _ArticleListState extends State<_ArticleList> {
                 borderRadius: BorderRadius.circular(10),
               ),
               child: Icon(
-                Icons.article_outlined,
+                _draftIcon(draft.articleType),
                 color: colors.onPrimaryContainer,
               ),
             ),
-            title: Text(draft.title, style: theme.textTheme.titleMedium),
+            title: Text(
+              draft.title,
+              style: theme.textTheme.titleMedium,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(draft.articleType),
+                LayoutBuilder(
+                  builder: (context, constraints) => Wrap(
+                    spacing: 8,
+                    runSpacing: 2,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    children: [
+                      ConstrainedBox(
+                        constraints: BoxConstraints(
+                          maxWidth: constraints.maxWidth,
+                        ),
+                        child: Text(
+                          draft.articleType,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      Text(
+                        _formatUpdatedAt(draft.updatedAt),
+                        maxLines: 1,
+                        softWrap: false,
+                        textAlign: TextAlign.end,
+                      ),
+                    ],
+                  ),
+                ),
                 if (draft.tags.isNotEmpty)
                   Wrap(
                     spacing: 8,
+                    crossAxisAlignment: WrapCrossAlignment.center,
                     children: [
-                      for (final tag in draft.tags)
-                        ActionChip(
-                          label: Text(tag),
-                          onPressed: () {
-                            FocusManager.instance.primaryFocus?.unfocus();
-                            _setSearch(tag);
-                          },
+                      ActionChip(
+                        label: Text(draft.tags.first),
+                        onPressed: () {
+                          FocusManager.instance.primaryFocus?.unfocus();
+                          _setSearch(draft.tags.first);
+                        },
+                      ),
+                      if (draft.tags.length > 1)
+                        Text(
+                          '+${draft.tags.length - 1}件',
+                          style: theme.textTheme.labelSmall?.copyWith(
+                            color: colors.onSurfaceVariant,
+                          ),
                         ),
                     ],
                   ),
