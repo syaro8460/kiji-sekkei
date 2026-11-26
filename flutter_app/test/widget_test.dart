@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:drift/native.dart';
+import 'package:flutter/rendering.dart' show RenderParagraph;
 import 'package:flutter_app/main.dart';
 import 'package:flutter_app/models/article_draft.dart';
 import 'package:flutter_app/models/article_template.dart';
@@ -78,6 +79,204 @@ void main() {
     );
     expect(drafts!.single.title, '編集した記事');
     expect(drafts.single.answers[template.questions.first], '記事のメモ');
+  });
+
+  testWidgets('creates an article with its multiline title unchanged', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(700, 1000));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    await tester.runAsync(() => database.listDrafts(DraftStatus.active));
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新しい記事を作成'));
+    await tester.pumpAndSettle();
+
+    final title = find.byType(TextField).first;
+    final titleInput = tester.widget<TextField>(title);
+    expect(titleInput.minLines, 1);
+    expect(titleInput.maxLines, isNull);
+    expect(titleInput.keyboardType, TextInputType.multiline);
+    expect(titleInput.textInputAction, TextInputAction.newline);
+    await tester.showKeyboard(title);
+    expect(
+      tester.testTextInput.setClientArgs!['inputAction'],
+      'TextInputAction.newline',
+    );
+
+    tester.testTextInput.updateEditingValue(
+      const TextEditingValue(
+        text: ' \n\t',
+        selection: TextSelection.collapsed(offset: 3),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '作成'))
+          .onPressed,
+      isNull,
+    );
+
+    const enteredTitle = '\n  一行目\n二行目  \n';
+    tester.testTextInput.updateEditingValue(
+      TextEditingValue(
+        text: enteredTitle,
+        selection: TextSelection.collapsed(offset: enteredTitle.length),
+      ),
+    );
+    await tester.testTextInput.receiveAction(TextInputAction.newline);
+    await tester.pumpAndSettle();
+    expect(
+      tester
+          .widget<TextButton>(find.widgetWithText(TextButton, '作成'))
+          .onPressed,
+      isNotNull,
+    );
+    await tester.tap(find.text('作成'));
+    await tester.pumpAndSettle();
+
+    final editorTitle = tester.widget<TextField>(
+      find.descendant(
+        of: find.byType(TextFormField).first,
+        matching: find.byType(TextField),
+      ),
+    );
+    expect(editorTitle.controller!.text, enteredTitle);
+    final drafts = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(drafts!.single.title, enteredTitle);
+  });
+
+  testWidgets('truncates article list titles after two lines', (tester) async {
+    await tester.binding.setSurfaceSize(const Size(390, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    const explicitTitle = '明示1行目\n明示2行目\n明示3行目';
+    const wrappedTitle =
+        '幅によって自動折り返しされる長いタイトルを表示して省略表示を確認するための文章'
+        '幅によって自動折り返しされる長いタイトルを表示して省略表示を確認するための文章'
+        '幅によって自動折り返しされる長いタイトルを表示して省略表示を確認するための文章'
+        '幅によって自動折り返しされる長いタイトルを表示して省略表示を確認するための文章';
+    const twoLineTitle = '1行目\n2行目';
+    const familyEmoji = '👨‍👩‍👧‍👦';
+    final emojiTitle = List.filled(60, familyEmoji).join();
+    await tester.runAsync(() async {
+      await database.saveDraft(
+        ArticleDraft(
+          id: '84c99aa0-85c1-4fa2-936c-10627414a1ba',
+          title: explicitTitle,
+          articleType: '日記',
+          questions: [],
+        ),
+      );
+      await database.saveDraft(
+        ArticleDraft(
+          id: '84c99aa0-85c1-4fa2-936c-10627414a1bb',
+          title: wrappedTitle,
+          articleType: '日記',
+          questions: [],
+        ),
+      );
+      await database.saveDraft(
+        ArticleDraft(
+          id: '84c99aa0-85c1-4fa2-936c-10627414a1bc',
+          title: twoLineTitle,
+          articleType: '日記',
+          questions: [],
+        ),
+      );
+      await database.saveDraft(
+        ArticleDraft(
+          id: '84c99aa0-85c1-4fa2-936c-10627414a1bd',
+          title: emojiTitle,
+          articleType: '日記',
+          questions: [],
+        ),
+      );
+    });
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pumpAndSettle();
+
+    for (final (title, prefix, truncated) in [
+      (explicitTitle, '明示1行目', true),
+      (wrappedTitle, '幅によって', true),
+      (twoLineTitle, twoLineTitle, false),
+    ]) {
+      final finder = truncated
+          ? find.byWidgetPredicate(
+              (widget) =>
+                  widget is Text && widget.data?.startsWith(prefix) == true,
+            )
+          : find.text(title);
+      final titleWidget = tester.widget<Text>(finder);
+      final paragraph = tester.renderObject<RenderParagraph>(finder);
+      expect(titleWidget.maxLines, 2);
+      expect(titleWidget.overflow, TextOverflow.ellipsis);
+      expect(titleWidget.softWrap, isTrue);
+      expect(paragraph.softWrap, isTrue);
+      expect(titleWidget.data!.endsWith('…'), truncated);
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(
+        paragraph.size.width,
+        lessThanOrEqualTo(paragraph.constraints.maxWidth + 0.01),
+      );
+      if (truncated) {
+        expect(
+          titleWidget.data!.characters.length,
+          lessThan(title.characters.length),
+        );
+      } else {
+        expect(titleWidget.data, title);
+      }
+    }
+
+    final emojiFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Text && widget.data?.startsWith(familyEmoji) == true,
+    );
+    final displayedEmojiTitle = tester.widget<Text>(emojiFinder).data!;
+    expect(displayedEmojiTitle.endsWith('…'), isTrue);
+    final displayedEmojiPrefix = displayedEmojiTitle.substring(
+      0,
+      displayedEmojiTitle.length - 1,
+    );
+    expect(
+      displayedEmojiPrefix.characters.every(
+        (cluster) => cluster == familyEmoji,
+      ),
+      isTrue,
+    );
+
+    await tester.binding.setSurfaceSize(const Size(1440, 900));
+    await tester.pumpAndSettle();
+    for (final prefix in ['明示1行目', '幅によって', familyEmoji]) {
+      final finder = find.byWidgetPredicate(
+        (widget) => widget is Text && widget.data?.startsWith(prefix) == true,
+      );
+      final displayedTitle = tester.widget<Text>(finder).data!;
+      final paragraph = tester.renderObject<RenderParagraph>(finder);
+      expect(displayedTitle.endsWith('…'), isTrue);
+      expect(paragraph.didExceedMaxLines, isFalse);
+      expect(
+        paragraph.size.width,
+        lessThanOrEqualTo(paragraph.constraints.maxWidth + 0.01),
+      );
+    }
+
+    final storedTitles = await tester.runAsync(
+      () => database.listDrafts(DraftStatus.active),
+    );
+    expect(storedTitles!.map((draft) => draft.title).toSet(), {
+      explicitTitle,
+      wrappedTitle,
+      twoLineTitle,
+      emojiTitle,
+    });
   });
 
   testWidgets('moves, restores, and permanently deletes an article', (
@@ -242,6 +441,7 @@ void main() {
       final input = find.widgetWithText(TextField, 'タグを追加');
       await tester.enterText(input, ' 作業記録 ');
       await tap(find.widgetWithText(TextButton, '追加'));
+      expect(tester.widget<TextField>(input).focusNode!.hasFocus, isTrue);
       await tester.enterText(input, '作業記録');
       await tap(find.widgetWithText(TextButton, '追加'));
       expect(find.widgetWithText(InputChip, '作業記録'), findsOneWidget);
@@ -277,6 +477,116 @@ void main() {
         () => database.listDrafts(DraftStatus.active),
       );
       expect(drafts!.singleWhere((draft) => draft.id == id).tags, isEmpty);
+    },
+  );
+
+  testWidgets(
+    'preserves edited title whitespace and shows numbered bounded answers',
+    (tester) async {
+      await tester.binding.setSurfaceSize(const Size(700, 1000));
+      addTearDown(() => tester.binding.setSurfaceSize(null));
+      final database = ArticleDatabase(NativeDatabase.memory());
+      addTearDown(database.close);
+      const id = 'b9576c40-75ea-4fd8-86f6-fdcfc0d6ed74';
+      await tester.runAsync(
+        () => database.saveDraft(
+          ArticleDraft(
+            id: id,
+            title: '編集前のタイトル',
+            articleType: '日記',
+            questions: ['最初の質問', '次の質問'],
+            answers: {'最初の質問': '', '次の質問': ''},
+          ),
+        ),
+      );
+      await tester.pumpWidget(MyApp(database: database));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('編集前のタイトル'));
+      await tester.pumpAndSettle();
+
+      final title = find.byType(TextFormField).first;
+      final titleInput = tester.widget<TextField>(
+        find.descendant(of: title, matching: find.byType(TextField)),
+      );
+      expect(titleInput.minLines, 1);
+      expect(titleInput.maxLines, isNull);
+      expect(titleInput.keyboardType, TextInputType.multiline);
+      expect(titleInput.textInputAction, TextInputAction.newline);
+      final firstAnswerFinder = find.byKey(const ValueKey('最初の質問'));
+      final firstAnswer = tester.widget<TextField>(
+        find.descendant(
+          of: firstAnswerFinder,
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(firstAnswer.minLines, 3);
+      expect(firstAnswer.maxLines, 8);
+      expect(find.text('【質問1】'), findsOneWidget);
+      expect(find.text('【質問2】'), findsOneWidget);
+      expect(find.text('【回答】'), findsNWidgets(2));
+
+      await tester.showKeyboard(title);
+      expect(
+        tester.testTextInput.setClientArgs!['inputAction'],
+        'TextInputAction.newline',
+      );
+      const imeTitle = 'IME入力';
+      tester.testTextInput.updateEditingValue(
+        TextEditingValue(
+          text: '$imeTitle\n',
+          selection: TextSelection.collapsed(offset: imeTitle.length + 1),
+        ),
+      );
+      await tester.testTextInput.receiveAction(TextInputAction.newline);
+      await tester.pumpAndSettle();
+      expect(titleInput.controller!.text, '$imeTitle\n');
+      var drafts = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      expect(drafts!.single.title, '$imeTitle\n');
+
+      const multilineTitle = '  前後の空白\nタイトル\n  ';
+      await tester.enterText(title, multilineTitle);
+      await tester.pumpAndSettle();
+      drafts = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      expect(drafts!.single.title, multilineTitle);
+
+      await tester.tap(find.text('記事構成を作成'));
+      await tester.pumpAndSettle();
+      expect(find.text(multilineTitle), findsOneWidget);
+      await tester.tap(find.byTooltip('戻る'));
+      await tester.pumpAndSettle();
+
+      await tester.tap(find.byTooltip('戻る'));
+      await tester.pumpAndSettle();
+      await tester.tap(
+        find.byWidgetPredicate(
+          (widget) =>
+              widget is Text &&
+              widget.data?.startsWith('  前後の空白\nタイトル') == true,
+        ),
+      );
+      await tester.pumpAndSettle();
+      final reopenedTitle = tester.widget<TextField>(
+        find.descendant(
+          of: find.byType(TextFormField).first,
+          matching: find.byType(TextField),
+        ),
+      );
+      expect(reopenedTitle.controller!.text, multilineTitle);
+
+      const blankTitle = ' \n\t';
+      await tester.enterText(title, blankTitle);
+      await tester.pumpAndSettle();
+      drafts = await tester.runAsync(
+        () => database.listDrafts(DraftStatus.active),
+      );
+      expect(drafts!.single.title, blankTitle);
+      await tester.tap(find.byTooltip('戻る'));
+      await tester.pumpAndSettle();
+      expect(find.text('無題の記事'), findsOneWidget);
     },
   );
 
@@ -425,6 +735,14 @@ void main() {
       await tap(find.text('削除'));
       await tap(find.text('削除'));
       await tap(find.text('反映'));
+      expect(
+        tester.getTopLeft(find.text('【質問1】')).dy,
+        lessThan(tester.getTopLeft(find.text('新しい質問')).dy),
+      );
+      expect(
+        tester.getTopLeft(find.text('【質問2】')).dy,
+        lessThan(tester.getTopLeft(find.text('名前を変えた質問')).dy),
+      );
       expect(find.text('編集した回答'), findsOneWidget);
       await tap(find.byTooltip('戻る'));
 

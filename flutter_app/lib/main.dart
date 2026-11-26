@@ -4,6 +4,8 @@ import 'dart:math' show min;
 import 'dart:typed_data';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/gestures.dart'
+    show PointerDeviceKind, PointerScrollEvent;
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:material_ui/material_ui.dart';
@@ -438,11 +440,35 @@ class _ArticleListState extends State<_ArticleList> {
                 color: colors.onPrimaryContainer,
               ),
             ),
-            title: Text(
-              draft.title,
-              style: theme.textTheme.titleMedium,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            title: LayoutBuilder(
+              builder: (context, constraints) {
+                final defaultStyle = DefaultTextStyle.of(context);
+                final style = defaultStyle.style.merge(
+                  theme.textTheme.titleMedium,
+                );
+                final title = draft.title.trim().isEmpty
+                    ? '無題の記事'
+                    : draft.title;
+                final displayTitle = _fitArticleListTitle(
+                  title,
+                  maxWidth: constraints.maxWidth,
+                  style: style,
+                  textDirection: Directionality.of(context),
+                  textScaler: MediaQuery.textScalerOf(context),
+                  locale: Localizations.maybeLocaleOf(context),
+                  textWidthBasis: defaultStyle.textWidthBasis,
+                  textHeightBehavior: defaultStyle.textHeightBehavior,
+                );
+                return Text(
+                  displayTitle,
+                  style: theme.textTheme.titleMedium,
+                  maxLines: 2,
+                  softWrap: true,
+                  overflow: TextOverflow.ellipsis,
+                  textWidthBasis: defaultStyle.textWidthBasis,
+                  textHeightBehavior: defaultStyle.textHeightBehavior,
+                );
+              },
             ),
             subtitle: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -738,6 +764,54 @@ class _ArticleListState extends State<_ArticleList> {
   );
 }
 
+String _fitArticleListTitle(
+  String title, {
+  required double maxWidth,
+  required TextStyle style,
+  required TextDirection textDirection,
+  required TextScaler textScaler,
+  required TextWidthBasis textWidthBasis,
+  required TextHeightBehavior? textHeightBehavior,
+  Locale? locale,
+}) {
+  bool fitsInTwoLines(String text) {
+    final painter = TextPainter(
+      text: TextSpan(text: text, style: style),
+      textDirection: textDirection,
+      textScaler: textScaler,
+      textWidthBasis: textWidthBasis,
+      textHeightBehavior: textHeightBehavior,
+      locale: locale,
+      maxLines: 2,
+    )..layout(maxWidth: maxWidth);
+    final fits =
+        !painter.didExceedMaxLines &&
+        painter.computeLineMetrics().every(
+          (line) => line.width <= maxWidth + 0.01,
+        );
+    painter.dispose();
+    return fits;
+  }
+
+  if (fitsInTwoLines(title)) return title;
+
+  final graphemes = title.characters.toList();
+  if (!fitsInTwoLines('…')) return '';
+
+  var low = 0;
+  var high = graphemes.length;
+  while (low < high) {
+    final middle = low + (high - low + 1) ~/ 2;
+    final candidate = '${graphemes.take(middle).join()}…';
+    if (fitsInTwoLines(candidate)) {
+      low = middle;
+    } else {
+      high = middle - 1;
+    }
+  }
+  return '${graphemes.take(low).join()}…';
+}
+
 class _ArticleEditor extends StatefulWidget {
   const _ArticleEditor({required this.database, required this.draft});
 
@@ -761,6 +835,8 @@ class _ArticleEditorState extends State<_ArticleEditor> {
 
   late final _tags = List<String>.of(widget.draft.tags);
   final _tagInput = TextEditingController();
+  final _tagInputFocus = FocusNode();
+  final _tagScrollController = ScrollController();
 
   ArticleDraft? _pendingDraft;
   Future<void>? _saving;
@@ -772,6 +848,8 @@ class _ArticleEditorState extends State<_ArticleEditor> {
   void dispose() {
     _title.dispose();
     _tagInput.dispose();
+    _tagInputFocus.dispose();
+    _tagScrollController.dispose();
     for (final controller in _answers.values) {
       controller.dispose();
     }
@@ -787,6 +865,9 @@ class _ArticleEditorState extends State<_ArticleEditor> {
       _tagInput.clear();
     });
     if (added) _queueSave();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _tagInputFocus.requestFocus();
+    });
   }
 
   Future<void> _changeTemplate() async {
@@ -867,10 +948,9 @@ class _ArticleEditorState extends State<_ArticleEditor> {
 
   ArticleDraft _currentDraft() {
     final original = widget.draft;
-    final title = _title.text.trim();
     return ArticleDraft(
       id: original.id,
-      title: title.isEmpty ? '無題の記事' : title,
+      title: _title.text,
       articleType: _articleType,
       questions: List.of(_questions),
       answers: {
@@ -1081,33 +1161,70 @@ class _ArticleEditorState extends State<_ArticleEditor> {
               TextFormField(
                 controller: _title,
                 onChanged: (_) => _queueSave(),
+                keyboardType: TextInputType.multiline,
+                textInputAction: TextInputAction.newline,
+                minLines: 1,
+                maxLines: null,
                 style: theme.textTheme.titleLarge,
                 decoration: const InputDecoration(labelText: 'タイトル'),
               ),
               const SizedBox(height: 16),
               if (_tags.isNotEmpty) ...[
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: [
-                    for (final (index, tag) in _tags.indexed)
-                      InputChip(
-                        label: Text(tag),
-                        deleteButtonTooltipMessage: '$tag のタグを削除',
-                        onDeleted: () {
-                          setState(() {
-                            _tags.removeAt(index);
-                          });
-                          _queueSave();
-                        },
+                Listener(
+                  onPointerSignal: (event) {
+                    if (event is! PointerScrollEvent ||
+                        !_tagScrollController.hasClients) {
+                      return;
+                    }
+                    final delta = event.scrollDelta;
+                    final scrollDelta = delta.dx.abs() > delta.dy.abs()
+                        ? delta.dx
+                        : delta.dy;
+                    final position = _tagScrollController.position;
+                    _tagScrollController.jumpTo(
+                      (position.pixels + scrollDelta)
+                          .clamp(
+                            position.minScrollExtent,
+                            position.maxScrollExtent,
+                          )
+                          .toDouble(),
+                    );
+                  },
+                  child: ScrollConfiguration(
+                    behavior: const MaterialScrollBehavior().copyWith(
+                      dragDevices: {
+                        PointerDeviceKind.touch,
+                        PointerDeviceKind.mouse,
+                      },
+                    ),
+                    child: SingleChildScrollView(
+                      controller: _tagScrollController,
+                      scrollDirection: Axis.horizontal,
+                      child: Row(
+                        children: [
+                          for (final (index, tag) in _tags.indexed) ...[
+                            if (index > 0) const SizedBox(width: 8),
+                            InputChip(
+                              label: Text(tag),
+                              deleteButtonTooltipMessage: '$tag のタグを削除',
+                              onDeleted: () {
+                                setState(() {
+                                  _tags.removeAt(index);
+                                });
+                                _queueSave();
+                              },
+                            ),
+                          ],
+                        ],
                       ),
-                  ],
+                    ),
+                  ),
                 ),
                 const SizedBox(height: 8),
               ],
               TextField(
                 controller: _tagInput,
-
+                focusNode: _tagInputFocus,
                 textInputAction: TextInputAction.done,
                 onSubmitted: (_) => _addTag(),
                 decoration: InputDecoration(
@@ -1134,18 +1251,22 @@ class _ArticleEditorState extends State<_ArticleEditor> {
                   ),
                 ],
               ),
-              for (final entry in _answers.entries) ...[
+              for (final (index, question) in _questions.indexed) ...[
                 const SizedBox(height: 16),
-                Text(entry.key, style: theme.textTheme.titleMedium),
+                Text('【質問${index + 1}】', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 4),
+                Text(question, style: theme.textTheme.titleMedium),
                 const SizedBox(height: 8),
+                Text('【回答】', style: theme.textTheme.titleMedium),
+                const SizedBox(height: 4),
                 Semantics(
-                  label: entry.key,
+                  label: question,
                   child: TextFormField(
-                    key: ValueKey(entry.key),
-                    controller: entry.value,
+                    key: ValueKey(question),
+                    controller: _answers[question]!,
                     onChanged: (_) => _queueSave(),
                     minLines: 3,
-                    maxLines: null,
+                    maxLines: 8,
                     decoration: const InputDecoration(hintText: '回答を入力'),
                   ),
                 ),

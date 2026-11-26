@@ -32,8 +32,8 @@ class _NewArticlePageState extends State<NewArticlePage> {
   }
 
   Future<void> _create() async {
-    final title = _title.text.trim();
-    if (_creating || title.isEmpty) return;
+    final title = _title.text;
+    if (_creating || title.trim().isEmpty) return;
     setState(() => _creating = true);
     final draft = ArticleDraft(
       id: newUuid(),
@@ -77,6 +77,10 @@ class _NewArticlePageState extends State<NewArticlePage> {
             controller: _title,
             enabled: !_creating,
             onChanged: (_) => setState(() {}),
+            keyboardType: TextInputType.multiline,
+            textInputAction: TextInputAction.newline,
+            minLines: 1,
+            maxLines: null,
             decoration: const InputDecoration(
               labelText: 'タイトルを入力',
               border: OutlineInputBorder(),
