@@ -5,10 +5,11 @@ class StartupScreen extends StatelessWidget {
 
   final bool showMigrationProgress;
 
+  static const _foreground = Color(0xFF103D20);
+
   @override
   Widget build(BuildContext context) {
-    final background =
-        MediaQuery.platformBrightnessOf(context) == Brightness.dark
+    final background = Theme.of(context).brightness == Brightness.dark
         ? const Color(0xFF30D158)
         : const Color(0xFF34C759);
 
@@ -38,7 +39,7 @@ class StartupScreen extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 34,
                       fontWeight: FontWeight.bold,
-                      color: Colors.white,
+                      color: _foreground,
                     ),
                   ),
                   if (showMigrationProgress) ...[
@@ -46,7 +47,7 @@ class StartupScreen extends StatelessWidget {
                     const SizedBox.square(
                       dimension: 24,
                       child: CircularProgressIndicator(
-                        color: Colors.white,
+                        color: _foreground,
                         semanticsLabel: '旧版のデータを移行しています',
                       ),
                     ),

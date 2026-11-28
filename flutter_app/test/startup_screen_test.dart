@@ -6,6 +6,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_app/main.dart';
 import 'package:flutter_app/models/article_draft.dart';
 import 'package:flutter_app/screens/startup_screen.dart';
+import 'package:flutter_app/storage/app_preferences.dart';
+import 'package:flutter_app/storage/appearance_preferences.dart';
 import 'package:flutter_app/storage/article_database.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
@@ -30,11 +32,25 @@ void main() {
 
   for (final brightness in Brightness.values) {
     testWidgets('shows the startup design in $brightness', (tester) async {
-      tester.platformDispatcher.platformBrightnessTestValue = brightness;
+      tester.platformDispatcher.platformBrightnessTestValue =
+          brightness == Brightness.dark ? Brightness.light : Brightness.dark;
       addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
       await tester.binding.setSurfaceSize(const Size(560, 240));
       addTearDown(() => tester.binding.setSurfaceSize(null));
-      await tester.pumpWidget(const MaterialApp(home: StartupScreen()));
+      final database = _StartupDatabase();
+      addTearDown(database.close);
+      final store = AppPreferences();
+      final saved = brightness == Brightness.dark
+          ? AppearanceMode.dark
+          : AppearanceMode.light;
+      await AppearancePreferences(preferences: store).save(saved);
+      await tester.pumpWidget(
+        await MyApp.restore(database: database, preferences: store),
+      );
+      expect(
+        Theme.of(tester.element(find.byType(StartupScreen))).brightness,
+        brightness,
+      );
 
       final expectedColor = brightness == Brightness.dark
           ? const Color(0xFF30D158)
@@ -61,9 +77,14 @@ void main() {
       final titleStyle = tester.widget<Text>(title).style!;
       expect(titleStyle.fontSize, 34);
       expect(titleStyle.fontWeight, FontWeight.bold);
-      expect(titleStyle.color, Colors.white);
+      expect(titleStyle.color, const Color(0xFF103D20));
+      final contrast =
+          (expectedColor.computeLuminance() + 0.05) /
+          (titleStyle.color!.computeLuminance() + 0.05);
+      expect(contrast, greaterThanOrEqualTo(4.5));
       expect(tester.getTopLeft(title).dy - tester.getBottomLeft(logo).dy, 24);
       expect(tester.takeException(), isNull);
+      await tester.pumpWidget(const SizedBox.shrink());
     });
   }
 
@@ -168,6 +189,19 @@ void main() {
         await tester.pumpWidget(MyApp(database: database));
         expect(find.byType(StartupScreen), findsOneWidget);
         expect(find.bySemanticsLabel('旧版のデータを移行しています'), findsOneWidget);
+
+        expect(
+          tester
+              .widget<CircularProgressIndicator>(
+                find.byType(CircularProgressIndicator),
+              )
+              .color,
+          const Color(0xFF103D20),
+        );
+        tester.platformDispatcher.platformBrightnessTestValue = Brightness.dark;
+        addTearDown(tester.platformDispatcher.clearPlatformBrightnessTestValue);
+        await tester.pump();
+        expect(attempts, 1);
 
         migration.completeError(PlatformException(code: 'test_failure'));
         await tester.pump(const Duration(milliseconds: 500));

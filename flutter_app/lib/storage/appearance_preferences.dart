@@ -20,10 +20,11 @@ class AppearancePreferences {
   final AppPreferences _preferences;
   static const _key = 'appearanceMode';
 
-  Future<AppearanceMode> load() async {
+  Future<AppearanceMode> load({Duration? timeout}) async {
     try {
       final saved = await _preferences.load(
         _key,
+        timeout: timeout,
         // The earlier appearance implementation used Android DataStore.
         fallback: !kIsWeb && defaultTargetPlatform == TargetPlatform.android
             ? () => SharedPreferencesAsync().getString(_key)

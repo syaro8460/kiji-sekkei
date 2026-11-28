@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:shared_preferences_platform_interface/shared_preferences_platform_interface.dart';
 import 'package:shared_preferences_platform_interface/types.dart';
 
@@ -34,14 +36,42 @@ class AppPreferences {
     return values[key];
   }
 
-  Future<String?> load(String key, {Future<String?> Function()? fallback}) =>
-      _serialize(() async {
-        final value = await _read(
-          _store ?? SharedPreferencesStorePlatform.instance,
-          key,
-        );
-        return value is String ? value : await fallback?.call();
-      });
+  Future<String?> load(
+    String key, {
+    Future<String?> Function()? fallback,
+    Duration? timeout,
+  }) => _serialize(() {
+    var expired = false;
+
+    Future<String?> read() async {
+      // The Windows and Linux legacy plugins populate a mutable cache on their
+      // first read. Their async plugins read the same default file and raw keys
+      // with a separate cache. Use that cache only for the bounded startup read,
+      // so a late read cannot replace the cache used by a later write.
+      final useSeparateCache =
+          timeout != null &&
+          !kIsWeb &&
+          (defaultTargetPlatform == TargetPlatform.windows ||
+              defaultTargetPlatform == TargetPlatform.linux);
+      final value = useSeparateCache
+          ? await SharedPreferencesAsync().getString(key)
+          : await _read(_store ?? SharedPreferencesStorePlatform.instance, key);
+      if (value is String) return value;
+      return expired ? null : await fallback?.call();
+    }
+
+    final result = read();
+    if (timeout == null) return result;
+    // Bound the read inside the queue. The source future can still finish, but
+    // its result or error is ignored and it never releases a queued write.
+    return result.timeout(
+      timeout,
+      onTimeout: () {
+        expired = true;
+        return null;
+      },
+    );
+  });
 
   Future<void> save(String key, String value) => _serialize(() async {
     final store = _store ?? SharedPreferencesStorePlatform.instance;

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show ValueListenable;
 import 'package:material_ui/material_ui.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 
@@ -10,33 +11,26 @@ class SettingsPage extends StatefulWidget {
   const SettingsPage({
     super.key,
     required this.database,
-    this.appearancePreferences,
+    required this.appearance,
+    required this.onAppearanceChanged,
   });
 
   final ArticleDatabase database;
-  final AppearancePreferences? appearancePreferences;
+  final ValueListenable<AppearanceMode> appearance;
+  final Future<void> Function(AppearanceMode) onAppearanceChanged;
 
   @override
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  late final _preferences =
-      widget.appearancePreferences ?? AppearancePreferences();
-  AppearanceMode? _appearance;
   String _version = '-';
   bool _selectingAppearance = false;
 
   @override
   void initState() {
     super.initState();
-    _loadAppearance();
     _loadVersion();
-  }
-
-  Future<void> _loadAppearance() async {
-    final mode = await _preferences.load();
-    if (mounted) setState(() => _appearance = mode);
   }
 
   Future<void> _loadVersion() async {
@@ -51,7 +45,8 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _selectAppearance() async {
-    if (_appearance == null || _selectingAppearance) return;
+    if (_selectingAppearance) return;
+    final current = widget.appearance.value;
     setState(() => _selectingAppearance = true);
     try {
       final selected = await showDialog<AppearanceMode>(
@@ -62,9 +57,9 @@ class _SettingsPageState extends State<SettingsPage> {
             for (final mode in AppearanceMode.values)
               ListTile(
                 title: Text(mode.label),
-                selected: mode == _appearance,
+                selected: mode == current,
                 leading: Icon(
-                  mode == _appearance
+                  mode == current
                       ? Icons.radio_button_checked
                       : Icons.radio_button_unchecked,
                 ),
@@ -73,9 +68,8 @@ class _SettingsPageState extends State<SettingsPage> {
           ],
         ),
       );
-      if (!mounted || selected == null || selected == _appearance) return;
-      await _preferences.save(selected);
-      if (mounted) setState(() => _appearance = selected);
+      if (!mounted || selected == null || selected == current) return;
+      await widget.onAppearanceChanged(selected);
     } catch (_) {
       if (mounted) {
         ScaffoldMessenger.of(context)
@@ -104,11 +98,11 @@ class _SettingsPageState extends State<SettingsPage> {
           _section('表示', [
             ListTile(
               title: const Text('外観'),
-              subtitle: const Text('外観の変更は今後のアップデートで反映されます。'),
-              trailing: Text(_appearance?.label ?? '読み込み中'),
-              onTap: _appearance == null || _selectingAppearance
-                  ? null
-                  : _selectAppearance,
+              trailing: ValueListenableBuilder<AppearanceMode>(
+                valueListenable: widget.appearance,
+                builder: (context, mode, child) => Text(mode.label),
+              ),
+              onTap: _selectingAppearance ? null : _selectAppearance,
             ),
           ]),
           _section('データ', [

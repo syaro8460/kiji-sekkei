@@ -52,7 +52,26 @@ void main() {
 
     final title = find.byType(TextFormField).first;
     await tester.enterText(title, '最初の記事');
-    await tester.enterText(find.byType(TextFormField).at(1), '記事のメモ');
+    final answer = find.byType(TextFormField).at(1);
+    await tester.enterText(answer, '記事のメモ');
+    final field = find.descendant(
+      of: answer,
+      matching: find.byType(EditableText),
+    );
+    final editable = tester.widget<EditableText>(field);
+    final selection = editable.controller.selection;
+    final dispatcher = tester.platformDispatcher;
+    addTearDown(dispatcher.clearPlatformBrightnessTestValue);
+    dispatcher.platformBrightnessTestValue = Brightness.dark;
+    await tester.pumpAndSettle();
+    expect(Theme.of(tester.element(field)).brightness, Brightness.dark);
+    final after = tester.widget<EditableText>(field);
+    expect(after.controller, same(editable.controller));
+    expect(after.focusNode, same(editable.focusNode));
+    expect(after.focusNode.hasFocus, isTrue);
+    expect(after.controller.text, '記事のメモ');
+    expect(after.controller.selection, selection);
+    expect(find.text('最初の記事'), findsOneWidget);
     expect(find.text('記事を書き出す'), findsOneWidget);
     await tester.tap(find.text('記事構成を作成'));
     await tester.pumpAndSettle();

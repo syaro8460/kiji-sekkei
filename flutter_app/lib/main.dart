@@ -7,7 +7,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/gestures.dart'
     show PointerDeviceKind, PointerScrollEvent;
 import 'package:flutter/foundation.dart'
-    show TargetPlatform, defaultTargetPlatform, kIsWeb;
+    show TargetPlatform, ValueListenable, defaultTargetPlatform, kIsWeb;
 import 'package:material_ui/material_ui.dart';
 
 import 'export/markdown_exporter.dart';
@@ -27,23 +27,62 @@ import 'storage/appearance_preferences.dart';
 import 'storage/article_database.dart';
 import 'storage/legacy_ios_migration.dart';
 
-void main() {
+Future<void> main() async {
   final binding = WidgetsFlutterBinding.ensureInitialized();
-  runApp(MyApp(firstFrameRasterized: binding.waitUntilFirstFrameRasterized));
+  runApp(
+    await MyApp.restore(
+      firstFrameRasterized: binding.waitUntilFirstFrameRasterized,
+    ),
+  );
 }
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.database, this.firstFrameRasterized});
+  const MyApp({
+    super.key,
+    this.database,
+    this.firstFrameRasterized,
+    this.preferences,
+    this.initialAppearance = AppearanceMode.system,
+  });
+
+  static Future<MyApp> restore({
+    ArticleDatabase? database,
+    Future<void>? firstFrameRasterized,
+    AppPreferences? preferences,
+  }) async {
+    final store = preferences ?? AppPreferences();
+    final appearance = await AppearancePreferences(preferences: store)
+        .load(timeout: const Duration(seconds: 2));
+    return MyApp(
+      database: database,
+      firstFrameRasterized: firstFrameRasterized,
+      preferences: store,
+      initialAppearance: appearance,
+    );
+  }
 
   final ArticleDatabase? database;
   final Future<void>? firstFrameRasterized;
+  final AppPreferences? preferences;
+  final AppearanceMode initialAppearance;
 
   @override
   State<MyApp> createState() => _MyAppState();
 }
 
 class _MyAppState extends State<MyApp> {
-  final _preferences = AppPreferences();
+  static const _seed = Color(0xFF365C51);
+  static final _lightTheme = ThemeData(colorSchemeSeed: _seed);
+  static final _darkTheme = ThemeData(
+    colorSchemeSeed: _seed,
+    brightness: Brightness.dark,
+  );
+
+  late final _preferences = widget.preferences ?? AppPreferences();
+  late final _appearancePreferences = AppearancePreferences(
+    preferences: _preferences,
+  );
+  late final _appearance = ValueNotifier(widget.initialAppearance);
   late final ArticleDatabase _database =
       widget.database ?? ArticleDatabase.local();
 
@@ -71,9 +110,16 @@ class _MyAppState extends State<MyApp> {
     });
   }
 
+  Future<void> _saveAppearance(AppearanceMode mode) async {
+    await _appearancePreferences.save(mode);
+    if (mounted) _appearance.value = mode;
+  }
+
   Widget _articleList() => _ArticleList(
     database: _database,
     preferences: _preferences,
+    appearance: _appearance,
+    onAppearanceChanged: _saveAppearance,
     minimumStartupElapsed: _minimumStartupElapsed,
   );
 
@@ -127,23 +173,34 @@ class _MyAppState extends State<MyApp> {
   @override
   void dispose() {
     _startupTimer?.cancel();
+    _appearance.dispose();
     if (widget.database == null) unawaited(_database.close());
     super.dispose();
   }
 
   @override
-  Widget build(BuildContext context) => MaterialApp(
-    title:
-        kIsWeb &&
-            const {'127.0.0.1', 'localhost'}.contains(Uri.base.host) &&
-            Uri.base.port == 8081
-        ? '記事設計 Dev'
-        : '記事設計',
-    locale: const Locale('ja', 'JP'),
-    supportedLocales: const [Locale('ja', 'JP')],
-    localizationsDelegates: GlobalMaterialLocalizations.delegates,
-    theme: ThemeData(colorSchemeSeed: const Color(0xFF365C51)),
-    home: _home(),
+  Widget build(BuildContext context) => ValueListenableBuilder<AppearanceMode>(
+    valueListenable: _appearance,
+    child: _home(),
+    builder: (context, appearance, home) => MaterialApp(
+      title:
+          kIsWeb &&
+              const {'127.0.0.1', 'localhost'}.contains(Uri.base.host) &&
+              Uri.base.port == 8081
+          ? '記事設計 Dev'
+          : '記事設計',
+      locale: const Locale('ja', 'JP'),
+      supportedLocales: const [Locale('ja', 'JP')],
+      localizationsDelegates: GlobalMaterialLocalizations.delegates,
+      theme: _lightTheme,
+      darkTheme: _darkTheme,
+      themeMode: switch (appearance) {
+        AppearanceMode.system => ThemeMode.system,
+        AppearanceMode.light => ThemeMode.light,
+        AppearanceMode.dark => ThemeMode.dark,
+      },
+      home: home,
+    ),
   );
 }
 
@@ -165,11 +222,15 @@ class _ArticleList extends StatefulWidget {
     required this.database,
     required this.minimumStartupElapsed,
     required this.preferences,
+    required this.appearance,
+    required this.onAppearanceChanged,
   });
 
   final ArticleDatabase database;
   final bool minimumStartupElapsed;
   final AppPreferences preferences;
+  final ValueListenable<AppearanceMode> appearance;
+  final Future<void> Function(AppearanceMode) onAppearanceChanged;
 
   @override
   State<_ArticleList> createState() => _ArticleListState();
@@ -336,9 +397,8 @@ class _ArticleListState extends State<_ArticleList> {
       MaterialPageRoute(
         builder: (context) => SettingsPage(
           database: widget.database,
-          appearancePreferences: AppearancePreferences(
-            preferences: widget.preferences,
-          ),
+          appearance: widget.appearance,
+          onAppearanceChanged: widget.onAppearanceChanged,
         ),
       ),
     );
@@ -693,141 +753,141 @@ class _ArticleListState extends State<_ArticleList> {
     },
   );
 
-  Widget _buildPage(
-    AsyncSnapshot<List<ArticleDraft>> snapshot,
-  ) => LayoutBuilder(
-    builder: (context, constraints) {
-      final width = constraints.maxWidth;
-      final wide = width >= 840;
-      final short = constraints.maxHeight < 320;
-      final outerInset = wide && width > 960 ? (width - 960) / 2 : 0.0;
-      final theme = Theme.of(context);
-      final colors = theme.colorScheme;
-
-      return Scaffold(
-        backgroundColor: colors.surfaceContainerLow,
-        appBar: AppBar(
-          backgroundColor: colors.surface,
-          surfaceTintColor: Colors.transparent,
-          shape: Border(bottom: BorderSide(color: colors.outlineVariant)),
-          leadingWidth: outerInset + 56,
-          leading: Align(
-            alignment: Alignment.centerRight,
-            child: PopupMenuButton<_ArticleListMenu>(
-              tooltip: 'メニュー',
-              icon: const Icon(Icons.menu),
-              onSelected: _selectMenu,
-              itemBuilder: (_) => const [
-                PopupMenuItem(
-                  value: _ArticleListMenu.templates,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.dashboard_customize_outlined),
-                    title: Text('テンプレート管理'),
-                  ),
-                ),
-                PopupMenuItem(
-                  value: _ArticleListMenu.trash,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.delete_outline),
-                    title: Text('ゴミ箱'),
-                  ),
-                ),
-                PopupMenuDivider(),
-                PopupMenuItem(
-                  value: _ArticleListMenu.settings,
-                  child: ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: Icon(Icons.settings_outlined),
-                    title: Text('設定'),
-                  ),
-                ),
-              ],
+  Widget _buildPage(AsyncSnapshot<List<ArticleDraft>> snapshot) =>
+      LayoutBuilder(
+        builder: (context, constraints) {
+          final width = constraints.maxWidth;
+          final wide = width >= 840;
+          final short = constraints.maxHeight < 320;
+          final outerInset = wide && width > 960 ? (width - 960) / 2 : 0.0;
+          final theme = Theme.of(context);
+          final colors = theme.colorScheme;
+          final searchBorder = OutlineInputBorder(
+            borderRadius: BorderRadius.circular(14),
+            borderSide: BorderSide(
+              color: colors.brightness == Brightness.dark
+                  ? colors.outline
+                  : colors.outlineVariant,
             ),
-          ),
-          titleSpacing: 8,
-          title: const Text('記事設計'),
-        ),
-        floatingActionButton: wide
-            ? null
-            : FloatingActionButton.extended(
-                onPressed: _newArticle,
-                icon: const Icon(Icons.add),
-                label: const Text('新しい記事を作成'),
-              ),
-        body: SafeArea(
-          bottom: false,
-          child: Align(
-            alignment: Alignment.topCenter,
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 960),
-              child: Padding(
-                padding: EdgeInsets.fromLTRB(
-                  wide ? 24 : 16,
-                  wide && !short ? 28 : 12,
-                  wide ? 24 : 16,
-                  0,
-                ),
-                child: Column(
-                  children: [
-                    if (wide) ...[
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              '記事一覧',
-                              style: theme.textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ),
-                          FilledButton.icon(
-                            onPressed: _newArticle,
-                            icon: const Icon(Icons.add),
-                            label: const Text('新しい記事を作成'),
-                          ),
-                        ],
-                      ),
-                      SizedBox(height: short ? 8 : 20),
-                    ],
-                    TextField(
-                      controller: _search,
-                      onChanged: (_) => setState(() {}),
-                      textInputAction: TextInputAction.search,
-                      decoration: InputDecoration(
-                        labelText: '検索',
-                        prefixIcon: const Icon(Icons.search),
-                        filled: true,
-                        fillColor: colors.surface,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: colors.outlineVariant),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(14),
-                          borderSide: BorderSide(color: colors.outlineVariant),
-                        ),
-                        suffixIcon: _search.text.isEmpty
-                            ? null
-                            : IconButton(
-                                onPressed: () => _setSearch(''),
-                                tooltip: '検索をクリア',
-                                icon: const Icon(Icons.clear),
-                              ),
+          );
+
+          return Scaffold(
+            backgroundColor: colors.surfaceContainerLow,
+            appBar: AppBar(
+              backgroundColor: colors.surface,
+              surfaceTintColor: Colors.transparent,
+              shape: Border(bottom: BorderSide(color: colors.outlineVariant)),
+              leadingWidth: outerInset + 56,
+              leading: Align(
+                alignment: Alignment.centerRight,
+                child: PopupMenuButton<_ArticleListMenu>(
+                  tooltip: 'メニュー',
+                  icon: const Icon(Icons.menu),
+                  onSelected: _selectMenu,
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(
+                      value: _ArticleListMenu.templates,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.dashboard_customize_outlined),
+                        title: Text('テンプレート管理'),
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    Expanded(child: _buildResults(snapshot, wide: wide)),
+                    PopupMenuItem(
+                      value: _ArticleListMenu.trash,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.delete_outline),
+                        title: Text('ゴミ箱'),
+                      ),
+                    ),
+                    PopupMenuDivider(),
+                    PopupMenuItem(
+                      value: _ArticleListMenu.settings,
+                      child: ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(Icons.settings_outlined),
+                        title: Text('設定'),
+                      ),
+                    ),
                   ],
                 ),
               ),
+              titleSpacing: 8,
+              title: const Text('記事設計'),
             ),
-          ),
-        ),
+            floatingActionButton: wide
+                ? null
+                : FloatingActionButton.extended(
+                    onPressed: _newArticle,
+                    icon: const Icon(Icons.add),
+                    label: const Text('新しい記事を作成'),
+                  ),
+            body: SafeArea(
+              bottom: false,
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 960),
+                  child: Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      wide ? 24 : 16,
+                      wide && !short ? 28 : 12,
+                      wide ? 24 : 16,
+                      0,
+                    ),
+                    child: Column(
+                      children: [
+                        if (wide) ...[
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  '記事一覧',
+                                  style: theme.textTheme.headlineMedium
+                                      ?.copyWith(fontWeight: FontWeight.w700),
+                                ),
+                              ),
+                              FilledButton.icon(
+                                onPressed: _newArticle,
+                                icon: const Icon(Icons.add),
+                                label: const Text('新しい記事を作成'),
+                              ),
+                            ],
+                          ),
+                          SizedBox(height: short ? 8 : 20),
+                        ],
+                        TextField(
+                          controller: _search,
+                          onChanged: (_) => setState(() {}),
+                          textInputAction: TextInputAction.search,
+                          decoration: InputDecoration(
+                            labelText: '検索',
+                            prefixIcon: const Icon(Icons.search),
+                            filled: true,
+                            fillColor: colors.surface,
+                            border: searchBorder,
+                            enabledBorder: searchBorder,
+                            suffixIcon: _search.text.isEmpty
+                                ? null
+                                : IconButton(
+                                    onPressed: () => _setSearch(''),
+                                    tooltip: '検索をクリア',
+                                    icon: const Icon(Icons.clear),
+                                  ),
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Expanded(child: _buildResults(snapshot, wide: wide)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        },
       );
-    },
-  );
 }
 
 String _fitArticleListTitle(
@@ -1143,7 +1203,11 @@ class _ArticleEditorState extends State<_ArticleEditor> {
     final colors = theme.colorScheme;
     final border = OutlineInputBorder(
       borderRadius: BorderRadius.circular(14),
-      borderSide: BorderSide(color: colors.outlineVariant),
+      borderSide: BorderSide(
+        color: colors.brightness == Brightness.dark
+            ? colors.outline
+            : colors.outlineVariant,
+      ),
     );
     return PopScope(
       canPop: _pendingDraft == null && _saving == null,
