@@ -21,6 +21,7 @@ void main() {
     addTearDown(database.close);
     await tester.runAsync(() => database.listDrafts(DraftStatus.active));
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     expect(find.text('まだ記事がありません'), findsOneWidget);
     final listContext = tester.element(find.text('記事設計'));
@@ -90,6 +91,7 @@ void main() {
     addTearDown(database.close);
     await tester.runAsync(() => database.listDrafts(DraftStatus.active));
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     await tester.tap(find.text('新しい記事を作成'));
     await tester.pumpAndSettle();
@@ -200,6 +202,7 @@ void main() {
       );
     });
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     for (final (title, prefix, truncated) in [
@@ -301,6 +304,7 @@ void main() {
       await database.moveToTrash(expiredId, now: DateTime(2000));
     });
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     Future<void> tap(Finder finder) async {
@@ -349,6 +353,7 @@ void main() {
     addTearDown(database.close);
     await tester.runAsync(() => database.listCustomTemplates());
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     Future<void> tap(Finder finder) async {
@@ -439,6 +444,7 @@ void main() {
         );
       });
       await tester.pumpWidget(MyApp(database: database));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       Future<void> tap(Finder finder) async {
@@ -509,6 +515,7 @@ void main() {
         ),
       );
       await tester.pumpWidget(MyApp(database: database));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
       await tester.tap(find.text('編集前のタイトル'));
       await tester.pumpAndSettle();
@@ -634,6 +641,7 @@ void main() {
         tester.getTopLeft(find.text(second)).dy;
 
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     expect(find.text('記事数：2件'), findsOneWidget);
     expect(appearsBefore(newTitle, oldTitle), isTrue);
@@ -674,6 +682,7 @@ void main() {
     SharedPreferences.resetStatic();
     await tester.pumpAndSettle();
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     expect(appearsBefore(oldTitle, newTitle), isTrue);
   });
@@ -697,6 +706,7 @@ void main() {
         ),
       );
       await tester.pumpWidget(MyApp(database: database));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       Future<void> tap(Finder finder) async {
@@ -795,6 +805,7 @@ void main() {
         );
       });
       await tester.pumpWidget(MyApp(database: database));
+      await tester.pump(const Duration(milliseconds: 500));
       await tester.pumpAndSettle();
 
       Future<void> tap(Finder finder) async {
@@ -846,6 +857,7 @@ void main() {
     await tester.runAsync(() => database.listDrafts(DraftStatus.active));
     await tester.binding.setSurfaceSize(const Size(1440, 900));
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
 
     final search = find.widgetWithText(TextField, '検索');
@@ -885,6 +897,7 @@ void main() {
       ),
     );
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     await tester.tap(find.text('保存前のタイトル'));
     await tester.pumpAndSettle();
@@ -923,6 +936,7 @@ void main() {
       ),
     );
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     await tester.tap(find.text('元のタイトル'));
     await tester.pumpAndSettle();
@@ -971,6 +985,7 @@ void main() {
       );
     });
     await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
     await tester.pumpAndSettle();
     Future<void> tap(String label) async {
       await tester.tap(find.text(label));

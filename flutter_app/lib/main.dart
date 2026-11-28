@@ -20,17 +20,22 @@ import 'screens/article_preview_page.dart';
 import 'screens/article_questions_page.dart';
 import 'screens/backup_page.dart';
 import 'screens/new_article_page.dart';
+import 'screens/startup_screen.dart';
 import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
 import 'storage/legacy_ios_migration.dart';
 
-void main() => runApp(const MyApp());
+void main() {
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  runApp(MyApp(firstFrameRasterized: binding.waitUntilFirstFrameRasterized));
+}
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.database});
+  const MyApp({super.key, this.database, this.firstFrameRasterized});
 
   final ArticleDatabase? database;
+  final Future<void>? firstFrameRasterized;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -42,22 +47,47 @@ class _MyAppState extends State<MyApp> {
 
   late Future<void> _legacyMigration = migrateLegacyIosData(_database);
   bool _continueWithLocalData = false;
+  bool _minimumStartupElapsed = false;
+  Timer? _startupTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    final firstFrameRasterized = widget.firstFrameRasterized;
+    if (firstFrameRasterized != null) {
+      unawaited(firstFrameRasterized.then((_) => _startStartupTimer()));
+    } else {
+      // Widget tests complete the frame without submitting it to the engine.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startStartupTimer());
+    }
+  }
+
+  void _startStartupTimer() {
+    if (!mounted) return;
+    _startupTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _minimumStartupElapsed = true);
+    });
+  }
+
+  Widget _articleList() => _ArticleList(
+    database: _database,
+    minimumStartupElapsed: _minimumStartupElapsed,
+  );
 
   Widget _home() {
     if (kIsWeb ||
         defaultTargetPlatform != TargetPlatform.iOS ||
         _continueWithLocalData) {
-      return _ArticleList(database: _database);
+      return _articleList();
     }
     return FutureBuilder<void>(
       future: _legacyMigration,
       builder: (context, snapshot) {
         if (snapshot.connectionState != ConnectionState.done) {
-          return const Scaffold(
-            body: Center(child: CircularProgressIndicator()),
-          );
+          return const StartupScreen(showMigrationProgress: true);
         }
         if (snapshot.hasError) {
+          if (!_minimumStartupElapsed) return const StartupScreen();
           return Scaffold(
             body: SafeArea(
               child: Center(
@@ -86,13 +116,14 @@ class _MyAppState extends State<MyApp> {
             ),
           );
         }
-        return _ArticleList(database: _database);
+        return _articleList();
       },
     );
   }
 
   @override
   void dispose() {
+    _startupTimer?.cancel();
     if (widget.database == null) unawaited(_database.close());
     super.dispose();
   }
@@ -125,9 +156,13 @@ enum _DraftSortOrder {
 }
 
 class _ArticleList extends StatefulWidget {
-  const _ArticleList({required this.database});
+  const _ArticleList({
+    required this.database,
+    required this.minimumStartupElapsed,
+  });
 
   final ArticleDatabase database;
+  final bool minimumStartupElapsed;
 
   @override
   State<_ArticleList> createState() => _ArticleListState();
@@ -135,6 +170,7 @@ class _ArticleList extends StatefulWidget {
 
 class _ArticleListState extends State<_ArticleList> {
   late Future<List<ArticleDraft>> _drafts = _loadDrafts();
+  bool _loadingInitially = true;
 
   final _search = TextEditingController();
   static const _sortPreferenceKey = 'draftSortOrder';
@@ -536,91 +572,86 @@ class _ArticleListState extends State<_ArticleList> {
     );
   }
 
-  Widget _buildResults({required bool wide}) =>
-      FutureBuilder<List<ArticleDraft>>(
-        future: _drafts,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState != ConnectionState.done) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (snapshot.hasError) {
-            return Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('記事を読み込めませんでした。'),
-                  TextButton(onPressed: _reload, child: const Text('再読み込み')),
+  Widget _buildResults(
+    AsyncSnapshot<List<ArticleDraft>> snapshot, {
+    required bool wide,
+  }) {
+    if (snapshot.connectionState != ConnectionState.done) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (snapshot.hasError) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('記事を読み込めませんでした。'),
+            TextButton(onPressed: _reload, child: const Text('再読み込み')),
+          ],
+        ),
+      );
+    }
+    final drafts = _sortedDrafts(_filterDrafts(snapshot.requireData));
+    final searching = _search.text.trim().isNotEmpty;
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 4),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text('${searching ? '検索結果' : '記事数'}：${drafts.length}件'),
+              ),
+              PopupMenuButton<_DraftSortOrder>(
+                tooltip: '並べ替え',
+                icon: const Icon(Icons.sort),
+                enabled: !_writingSortOrder,
+                onSelected: _selectSortOrder,
+                itemBuilder: (_) => [
+                  for (final order in _DraftSortOrder.values)
+                    CheckedPopupMenuItem(
+                      value: order,
+                      checked: _sortOrder == order,
+                      child: Text(order.label),
+                    ),
                 ],
               ),
-            );
-          }
-          final drafts = _sortedDrafts(_filterDrafts(snapshot.requireData));
-          final searching = _search.text.trim().isNotEmpty;
-          return Column(
-            children: [
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 4),
-                child: Row(
-                  children: [
-                    Expanded(
-                      child: Text(
-                        '${searching ? '検索結果' : '記事数'}：${drafts.length}件',
-                      ),
-                    ),
-                    PopupMenuButton<_DraftSortOrder>(
-                      tooltip: '並べ替え',
-                      icon: const Icon(Icons.sort),
-                      enabled: !_writingSortOrder,
-                      onSelected: _selectSortOrder,
-                      itemBuilder: (_) => [
-                        for (final order in _DraftSortOrder.values)
-                          CheckedPopupMenuItem(
-                            value: order,
-                            checked: _sortOrder == order,
-                            child: Text(order.label),
-                          ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: drafts.isEmpty
+              ? Center(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          searching ? Icons.search : Icons.description_outlined,
+                        ),
+                        const SizedBox(height: 12),
+                        Text(
+                          searching ? '検索結果がありません' : 'まだ記事がありません',
+                          style: Theme.of(context).textTheme.titleLarge,
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          searching
+                              ? '別のキーワードで検索してみてください。'
+                              : '記事を書く前のアイデアや構成を整理できます。\n'
+                                    '最初の記事を作成してみましょう。',
+                          textAlign: TextAlign.center,
+                        ),
                       ],
                     ),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: drafts.isEmpty
-                    ? Center(
-                        child: SingleChildScrollView(
-                          padding: const EdgeInsets.all(24),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(
-                                searching
-                                    ? Icons.search
-                                    : Icons.description_outlined,
-                              ),
-                              const SizedBox(height: 12),
-                              Text(
-                                searching ? '検索結果がありません' : 'まだ記事がありません',
-                                style: Theme.of(context).textTheme.titleLarge,
-                                textAlign: TextAlign.center,
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                searching
-                                    ? '別のキーワードで検索してみてください。'
-                                    : '記事を書く前のアイデアや構成を整理できます。\n'
-                                          '最初の記事を作成してみましょう。',
-                                textAlign: TextAlign.center,
-                              ),
-                            ],
-                          ),
-                        ),
-                      )
-                    : _buildDraftList(drafts, wide: wide),
-              ),
-            ],
-          );
-        },
-      );
+                  ),
+                )
+              : _buildDraftList(drafts, wide: wide),
+        ),
+      ],
+    );
+  }
 
   Widget _toolbarAction({
     required bool wide,
@@ -639,7 +670,22 @@ class _ArticleListState extends State<_ArticleList> {
   }
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
+  Widget build(BuildContext context) => FutureBuilder<List<ArticleDraft>>(
+    future: _drafts,
+    builder: (context, snapshot) {
+      if (_loadingInitially &&
+          (!widget.minimumStartupElapsed ||
+              snapshot.connectionState != ConnectionState.done)) {
+        return const StartupScreen();
+      }
+      _loadingInitially = false;
+      return _buildPage(snapshot);
+    },
+  );
+
+  Widget _buildPage(
+    AsyncSnapshot<List<ArticleDraft>> snapshot,
+  ) => LayoutBuilder(
     builder: (context, constraints) {
       final width = constraints.maxWidth;
       final wide = width >= 840;
@@ -746,7 +792,7 @@ class _ArticleListState extends State<_ArticleList> {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Expanded(child: _buildResults(wide: wide)),
+                    Expanded(child: _buildResults(snapshot, wide: wide)),
                   ],
                 ),
               ),
