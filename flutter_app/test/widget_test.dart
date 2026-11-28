@@ -358,7 +358,16 @@ void main() {
 
     Future<void> fill(String name, String questions) async {
       await tester.enterText(find.byType(TextFormField).first, name);
-      await tester.enterText(find.byType(TextFormField).last, questions);
+      final lines = questions.split('\n');
+      for (final (index, question) in lines.indexed) {
+        final fields = find.byType(TextFormField);
+        if (fields.evaluate().length <= index + 1) {
+          await tap(find.text('質問を追加'));
+        }
+        final field = fields.at(index + 1);
+        await tester.ensureVisible(field);
+        await tester.enterText(field, question);
+      }
       await tap(find.text('保存'));
     }
 

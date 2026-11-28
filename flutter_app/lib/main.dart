@@ -384,13 +384,7 @@ class _ArticleListState extends State<_ArticleList> {
       (template) => template.name == articleType,
     );
     final iconName = templates.isEmpty ? null : templates.first.iconName;
-    return switch (iconName) {
-      'star.bubble' => Icons.rate_review_outlined,
-      'arrow.left.arrow.right' => Icons.compare_arrows,
-      'person.text.rectangle' => Icons.person_outline,
-      'xmark.circle' => Icons.cancel_outlined,
-      _ => Icons.description_outlined,
-    };
+    return templateIcon(iconName);
   }
 
   String _formatUpdatedAt(DateTime updatedAt) {
