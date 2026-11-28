@@ -1,3 +1,5 @@
+import 'dart:io' show Platform;
+
 import 'package:drift/native.dart';
 import 'package:file/file.dart';
 import 'package:file/memory.dart';
@@ -11,7 +13,9 @@ import 'package:path_provider_windows/path_provider_windows.dart';
 import 'package:shared_preferences_windows/shared_preferences_windows.dart';
 
 class _PathProvider extends PathProviderWindows {
-  String? directory = '/preferences';
+  _PathProvider(this.directory);
+
+  String? directory;
 
   @override
   Future<String?> getApplicationSupportPath() async => directory;
@@ -20,6 +24,9 @@ class _PathProvider extends PathProviderWindows {
 void main() {
   const sortKey = AppPreferences.draftSortOrderKey;
   const appearanceKey = 'appearanceMode';
+  final useWindowsPaths = Platform.isWindows;
+  final directory = useWindowsPaths ? r'C:\preferences' : '/preferences';
+  const fileName = 'shared_preferences.json';
   late MemoryFileSystem fs;
   late _PathProvider paths;
   late bool denyWrites;
@@ -34,6 +41,7 @@ void main() {
   setUp(() {
     denyWrites = false;
     fs = MemoryFileSystem(
+      style: useWindowsPaths ? FileSystemStyle.windows : FileSystemStyle.posix,
       opHandle: (path, operation) {
         if (denyWrites && operation == FileSystemOp.write) {
           denyWrites = false;
@@ -41,8 +49,8 @@ void main() {
         }
       },
     );
-    paths = _PathProvider();
-    fs.file('/preferences/shared_preferences.json')
+    paths = _PathProvider(directory);
+    fs.file(fs.path.join(directory, fileName))
       ..createSync(recursive: true)
       ..writeAsStringSync(
         '{"flutter.draftSortOrder":"updatedOldest","appearanceMode":"light","flutter.other":true}',
@@ -77,7 +85,7 @@ void main() {
           AppearanceMode.dark,
         );
         expect(
-          fs.file('/preferences/shared_preferences.json').readAsStringSync(),
+          fs.file(fs.path.join(directory, fileName)).readAsStringSync(),
           contains('"flutter.other":true'),
         );
       },
@@ -129,7 +137,7 @@ void main() {
         await tester.pumpWidget(const SizedBox());
         await open();
         expect(find.text('ライト'), findsOneWidget);
-        paths.directory = '/preferences';
+        paths.directory = directory;
         denyWrites = false;
         final reopened = openStore();
         expect(await reopened.load(sortKey), 'updatedOldest');
