@@ -16,7 +16,7 @@ const _migrationChannel = MethodChannel('kijisekkei/legacy_ios_migration');
 class _StartupDatabase extends ArticleDatabase {
   _StartupDatabase() : super(NativeDatabase.memory());
 
-  final draftLoad = Completer<List<ArticleDraft>>();
+  var draftLoad = Completer<List<ArticleDraft>>();
 
   @override
   Future<List<ArticleDraft>> listDrafts(DraftStatus status) => draftLoad.future;
@@ -67,26 +67,81 @@ void main() {
     });
   }
 
-  for (final fail in [false, true]) {
-    testWidgets('leaves startup as soon as drafts complete (error: $fail)', (
-      tester,
-    ) async {
+  testWidgets(
+    'measures 500 ms from first rasterization even when data is ready',
+    (tester) async {
+      final database = _StartupDatabase();
+      addTearDown(database.close);
+      final firstFrame = Completer<void>();
+      database.draftLoad.complete([]);
+      await tester.pumpWidget(
+        MyApp(database: database, firstFrameRasterized: firstFrame.future),
+      );
+      await tester.pump(const Duration(seconds: 1));
+      expect(find.byType(StartupScreen), findsOneWidget);
+
+      firstFrame.complete();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 499));
+      expect(find.byType(StartupScreen), findsOneWidget);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.byType(StartupScreen), findsNothing);
+      expect(find.text('まだ記事がありません'), findsOneWidget);
+    },
+  );
+
+  testWidgets('does not wait again when the initial read takes over 500 ms', (
+    tester,
+  ) async {
+    final database = _StartupDatabase();
+    addTearDown(database.close);
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 700));
+    expect(find.byType(StartupScreen), findsOneWidget);
+    database.draftLoad.complete([]);
+    await tester.idle();
+    await tester.pump();
+    expect(find.byType(StartupScreen), findsNothing);
+    expect(find.text('まだ記事がありません'), findsOneWidget);
+  });
+
+  testWidgets(
+    'shows a first read error after 500 ms and retries without startup',
+    (tester) async {
       final database = _StartupDatabase();
       addTearDown(database.close);
       await tester.pumpWidget(MyApp(database: database));
+      database.draftLoad.completeError(StateError('test read failure'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 499));
       expect(find.byType(StartupScreen), findsOneWidget);
-      expect(find.text('新しい記事を作成'), findsNothing);
+      await tester.pump(const Duration(milliseconds: 1));
+      expect(find.byType(StartupScreen), findsNothing);
+      expect(find.text('記事を読み込めませんでした。'), findsOneWidget);
 
-      if (fail) {
-        database.draftLoad.completeError(StateError('test read failure'));
-      } else {
-        database.draftLoad.complete([]);
-      }
+      database.draftLoad = Completer<List<ArticleDraft>>();
+      await tester.tap(find.text('再読み込み'));
       await tester.pump();
       expect(find.byType(StartupScreen), findsNothing);
-      expect(find.text(fail ? '記事を読み込めませんでした。' : 'まだ記事がありません'), findsOneWidget);
-    });
-  }
+      expect(find.byType(CircularProgressIndicator), findsOneWidget);
+      database.draftLoad.complete([]);
+      await tester.pump();
+      expect(find.text('まだ記事がありません'), findsOneWidget);
+    },
+  );
+
+  testWidgets('disposes cleanly during the minimum display time', (
+    tester,
+  ) async {
+    final database = _StartupDatabase();
+    addTearDown(database.close);
+    await tester.pumpWidget(MyApp(database: database));
+    expect(find.byType(StartupScreen), findsOneWidget);
+    await tester.pumpWidget(const SizedBox.shrink());
+    database.draftLoad.complete([]);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+  });
 
   for (final retry in [false, true]) {
     testWidgets(
@@ -115,7 +170,7 @@ void main() {
         expect(find.bySemanticsLabel('旧版のデータを移行しています'), findsOneWidget);
 
         migration.completeError(PlatformException(code: 'test_failure'));
-        await tester.pump();
+        await tester.pump(const Duration(milliseconds: 500));
         expect(find.byType(StartupScreen), findsNothing);
         expect(find.text('再試行'), findsOneWidget);
         expect(find.text('現在のデータで開く'), findsOneWidget);

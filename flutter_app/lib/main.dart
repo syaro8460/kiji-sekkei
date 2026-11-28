@@ -26,12 +26,16 @@ import 'screens/trash_page.dart';
 import 'storage/article_database.dart';
 import 'storage/legacy_ios_migration.dart';
 
-void main() => runApp(const MyApp());
+void main() {
+  final binding = WidgetsFlutterBinding.ensureInitialized();
+  runApp(MyApp(firstFrameRasterized: binding.waitUntilFirstFrameRasterized));
+}
 
 class MyApp extends StatefulWidget {
-  const MyApp({super.key, this.database});
+  const MyApp({super.key, this.database, this.firstFrameRasterized});
 
   final ArticleDatabase? database;
+  final Future<void>? firstFrameRasterized;
 
   @override
   State<MyApp> createState() => _MyAppState();
@@ -43,12 +47,38 @@ class _MyAppState extends State<MyApp> {
 
   late Future<void> _legacyMigration = migrateLegacyIosData(_database);
   bool _continueWithLocalData = false;
+  bool _minimumStartupElapsed = false;
+  Timer? _startupTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    final firstFrameRasterized = widget.firstFrameRasterized;
+    if (firstFrameRasterized != null) {
+      unawaited(firstFrameRasterized.then((_) => _startStartupTimer()));
+    } else {
+      // Widget tests complete the frame without submitting it to the engine.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _startStartupTimer());
+    }
+  }
+
+  void _startStartupTimer() {
+    if (!mounted) return;
+    _startupTimer = Timer(const Duration(milliseconds: 500), () {
+      if (mounted) setState(() => _minimumStartupElapsed = true);
+    });
+  }
+
+  Widget _articleList() => _ArticleList(
+    database: _database,
+    minimumStartupElapsed: _minimumStartupElapsed,
+  );
 
   Widget _home() {
     if (kIsWeb ||
         defaultTargetPlatform != TargetPlatform.iOS ||
         _continueWithLocalData) {
-      return _ArticleList(database: _database);
+      return _articleList();
     }
     return FutureBuilder<void>(
       future: _legacyMigration,
@@ -57,6 +87,7 @@ class _MyAppState extends State<MyApp> {
           return const StartupScreen(showMigrationProgress: true);
         }
         if (snapshot.hasError) {
+          if (!_minimumStartupElapsed) return const StartupScreen();
           return Scaffold(
             body: SafeArea(
               child: Center(
@@ -85,13 +116,14 @@ class _MyAppState extends State<MyApp> {
             ),
           );
         }
-        return _ArticleList(database: _database);
+        return _articleList();
       },
     );
   }
 
   @override
   void dispose() {
+    _startupTimer?.cancel();
     if (widget.database == null) unawaited(_database.close());
     super.dispose();
   }
@@ -124,9 +156,13 @@ enum _DraftSortOrder {
 }
 
 class _ArticleList extends StatefulWidget {
-  const _ArticleList({required this.database});
+  const _ArticleList({
+    required this.database,
+    required this.minimumStartupElapsed,
+  });
 
   final ArticleDatabase database;
+  final bool minimumStartupElapsed;
 
   @override
   State<_ArticleList> createState() => _ArticleListState();
@@ -644,7 +680,8 @@ class _ArticleListState extends State<_ArticleList> {
     future: _drafts,
     builder: (context, snapshot) {
       if (_loadingInitially &&
-          snapshot.connectionState != ConnectionState.done) {
+          (!widget.minimumStartupElapsed ||
+              snapshot.connectionState != ConnectionState.done)) {
         return const StartupScreen();
       }
       _loadingInitially = false;
