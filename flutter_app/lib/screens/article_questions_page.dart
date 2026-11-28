@@ -21,8 +21,125 @@ class _QuestionRow {
   ArticleQuestion question;
 }
 
+class _ArticleQuestionsPopEntry extends PopEntry<List<ArticleQuestion>> {
+  _ArticleQuestionsPopEntry(this.onBlockedPop);
+
+  final VoidCallback onBlockedPop;
+
+  @override
+  final ValueNotifier<bool> canPopNotifier = ValueNotifier(true);
+
+  @override
+  void onPopInvokedWithResult(bool didPop, List<ArticleQuestion>? result) {
+    if (!didPop) onBlockedPop();
+  }
+}
+
 class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
-  late final _questions = widget.questions.map(_QuestionRow.new).toList();
+  late final List<ArticleQuestion> _originalQuestions;
+  late final List<_QuestionRow> _questions;
+  late final _popEntry = _ArticleQuestionsPopEntry(_requestDiscardConfirmation);
+  ModalRoute<dynamic>? _route;
+  bool _confirmingDiscard = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _originalQuestions = List.unmodifiable(widget.questions);
+    _questions = _originalQuestions.map(_QuestionRow.new).toList();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (_route == route) return;
+    _route?.unregisterPopEntry(_popEntry);
+    _route = route;
+    route?.registerPopEntry(_popEntry);
+  }
+
+  @override
+  void dispose() {
+    _route?.unregisterPopEntry(_popEntry);
+    _popEntry.canPopNotifier.dispose();
+    super.dispose();
+  }
+
+  void _updateQuestions(VoidCallback edit) {
+    setState(edit);
+    // The navigator can receive a back request before the next build.
+    _popEntry.canPopNotifier.value = !_hasUnappliedChanges;
+  }
+
+  bool get _hasUnappliedChanges {
+    if (_questions.length != _originalQuestions.length) return true;
+    for (final (index, row) in _questions.indexed) {
+      if (row.question != _originalQuestions[index]) return true;
+    }
+    return false;
+  }
+
+  void _requestDiscardConfirmation() {
+    if (_confirmingDiscard || !_hasUnappliedChanges) return;
+    _confirmingDiscard = true;
+    // Install the dialog at the start of the frame that builds its route.
+    WidgetsBinding.instance.scheduleFrameCallback((_) => _confirmDiscard());
+  }
+
+  Future<void> _confirmDiscard() async {
+    final route = _route;
+    if (!mounted ||
+        route == null ||
+        !route.isCurrent ||
+        !_hasUnappliedChanges) {
+      _confirmingDiscard = false;
+      return;
+    }
+
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final dialog = DialogRoute<bool>(
+      context: context,
+      themes: InheritedTheme.capture(from: context, to: navigator.context),
+      barrierColor:
+          DialogTheme.of(context).barrierColor ??
+          Theme.of(context).dialogTheme.barrierColor ??
+          Colors.black54,
+      traversalEdgeBehavior: TraversalEdgeBehavior.closedLoop,
+      builder: (context) {
+        void close(bool discard) {
+          if (ModalRoute.of(context)?.isCurrent == true) {
+            Navigator.of(context).pop(discard);
+          }
+        }
+
+        return AlertDialog(
+          title: const Text('変更を破棄しますか？'),
+          content: const Text('未反映の変更があります。変更を破棄して戻りますか？'),
+          actions: [
+            TextButton(
+              onPressed: () => close(false),
+              child: const Text('編集に戻る'),
+            ),
+            FilledButton(onPressed: () => close(true), child: const Text('破棄')),
+          ],
+        );
+      },
+    );
+    final discard = await navigator.push(dialog);
+    // Keep repeated back requests blocked until the dialog has left the overlay.
+    await dialog.completed;
+    _confirmingDiscard = false;
+    if (mounted && discard == true && route == _route && route.isCurrent) {
+      route.navigator!.pop();
+    }
+  }
+
+  void _apply() {
+    final route = _route;
+    if (_confirmingDiscard || route == null || !route.isCurrent) return;
+    route.navigator!.pop(_questions.map((row) => row.question).toList());
+  }
 
   Future<void> _editQuestion([int? index]) async {
     final original = index == null ? null : _questions[index].question;
@@ -37,7 +154,7 @@ class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
       ),
     );
     if (!mounted || text == null) return;
-    setState(() {
+    _updateQuestions(() {
       final question = (text: text, answer: original?.answer ?? '');
       if (index == null) {
         _questions.add(_QuestionRow(question));
@@ -71,14 +188,14 @@ class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
       ),
     );
     if (mounted && confirmed == true) {
-      setState(() {
+      _updateQuestions(() {
         _questions.removeAt(index);
       });
     }
   }
 
   void _moveQuestion(int from, int to) {
-    setState(() {
+    _updateQuestions(() {
       _questions.insert(to, _questions.removeAt(from));
     });
   }
@@ -95,15 +212,7 @@ class _ArticleQuestionsPageState extends State<ArticleQuestionsPage> {
   @override
   Widget build(BuildContext context) => ContentPageFrame(
     title: '質問を編集',
-    actions: [
-      TextButton(
-        onPressed: () => Navigator.pop(
-          context,
-          _questions.map((row) => row.question).toList(),
-        ),
-        child: const Text('反映'),
-      ),
-    ],
+    actions: [TextButton(onPressed: _apply, child: const Text('反映'))],
     bottomAction: FilledButton.icon(
       onPressed: () => _editQuestion(),
       icon: const Icon(Icons.add),
