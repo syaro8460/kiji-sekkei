@@ -9,7 +9,6 @@ import 'package:flutter/gestures.dart'
 import 'package:flutter/foundation.dart'
     show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:material_ui/material_ui.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import 'export/markdown_exporter.dart';
 import 'models/article_draft.dart';
@@ -18,11 +17,13 @@ import 'models/json_compat.dart';
 import 'screens/content_page_frame.dart';
 import 'screens/article_preview_page.dart';
 import 'screens/article_questions_page.dart';
-import 'screens/backup_page.dart';
 import 'screens/new_article_page.dart';
+import 'screens/settings_page.dart';
 import 'screens/startup_screen.dart';
 import 'screens/template_page.dart';
 import 'screens/trash_page.dart';
+import 'storage/app_preferences.dart';
+import 'storage/appearance_preferences.dart';
 import 'storage/article_database.dart';
 import 'storage/legacy_ios_migration.dart';
 
@@ -42,6 +43,7 @@ class MyApp extends StatefulWidget {
 }
 
 class _MyAppState extends State<MyApp> {
+  final _preferences = AppPreferences();
   late final ArticleDatabase _database =
       widget.database ?? ArticleDatabase.local();
 
@@ -71,6 +73,7 @@ class _MyAppState extends State<MyApp> {
 
   Widget _articleList() => _ArticleList(
     database: _database,
+    preferences: _preferences,
     minimumStartupElapsed: _minimumStartupElapsed,
   );
 
@@ -155,14 +158,18 @@ enum _DraftSortOrder {
   final String label;
 }
 
+enum _ArticleListMenu { templates, trash, settings }
+
 class _ArticleList extends StatefulWidget {
   const _ArticleList({
     required this.database,
     required this.minimumStartupElapsed,
+    required this.preferences,
   });
 
   final ArticleDatabase database;
   final bool minimumStartupElapsed;
+  final AppPreferences preferences;
 
   @override
   State<_ArticleList> createState() => _ArticleListState();
@@ -173,9 +180,8 @@ class _ArticleListState extends State<_ArticleList> {
   bool _loadingInitially = true;
 
   final _search = TextEditingController();
-  static const _sortPreferenceKey = 'draftSortOrder';
   _DraftSortOrder _sortOrder = _DraftSortOrder.updatedNewest;
-  late final _preferences = SharedPreferences.getInstance();
+  bool _loadingSortOrder = true;
   bool _writingSortOrder = false;
   bool _duplicating = false;
 
@@ -187,26 +193,30 @@ class _ArticleListState extends State<_ArticleList> {
 
   Future<void> _loadSortOrder() async {
     try {
-      final preferences = await _preferences;
-      final saved = preferences.getString(_sortPreferenceKey);
+      final saved = await widget.preferences.load(
+        AppPreferences.draftSortOrderKey,
+      );
       final order = _DraftSortOrder.values
           .where((order) => order.name == saved)
           .firstOrNull;
-      if (mounted && order != null && !_writingSortOrder) {
+      if (mounted && order != null) {
         setState(() => _sortOrder = order);
       }
     } catch (_) {
       // Keep the default sort order when preferences are unavailable.
+    } finally {
+      if (mounted) setState(() => _loadingSortOrder = false);
     }
   }
 
   Future<void> _selectSortOrder(_DraftSortOrder order) async {
-    if (_writingSortOrder || order == _sortOrder) return;
+    if (_loadingSortOrder || _writingSortOrder || order == _sortOrder) return;
     setState(() => _writingSortOrder = true);
     try {
-      final preferences = await _preferences;
-      final saved = await preferences.setString(_sortPreferenceKey, order.name);
-      if (!saved) throw StateError('Sort order could not be saved.');
+      await widget.preferences.save(
+        AppPreferences.draftSortOrderKey,
+        order.name,
+      );
       if (mounted) setState(() => _sortOrder = order);
     } catch (_) {
       if (mounted) {
@@ -321,10 +331,15 @@ class _ArticleListState extends State<_ArticleList> {
     );
   }
 
-  Future<void> _openBackup() async {
+  Future<void> _openSettings() async {
     final restored = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
-        builder: (context) => BackupPage(database: widget.database),
+        builder: (context) => SettingsPage(
+          database: widget.database,
+          appearancePreferences: AppearancePreferences(
+            preferences: widget.preferences,
+          ),
+        ),
       ),
     );
     if (!mounted || restored != true) return;
@@ -604,7 +619,7 @@ class _ArticleListState extends State<_ArticleList> {
               PopupMenuButton<_DraftSortOrder>(
                 tooltip: '並べ替え',
                 icon: const Icon(Icons.sort),
-                enabled: !_writingSortOrder,
+                enabled: !_loadingSortOrder && !_writingSortOrder,
                 onSelected: _selectSortOrder,
                 itemBuilder: (_) => [
                   for (final order in _DraftSortOrder.values)
@@ -653,20 +668,15 @@ class _ArticleListState extends State<_ArticleList> {
     );
   }
 
-  Widget _toolbarAction({
-    required bool wide,
-    required String label,
-    required IconData icon,
-    required VoidCallback onPressed,
-  }) {
-    if (wide) {
-      return TextButton.icon(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        label: Text(label),
-      );
+  void _selectMenu(_ArticleListMenu item) {
+    switch (item) {
+      case _ArticleListMenu.templates:
+        _openTemplates();
+      case _ArticleListMenu.trash:
+        _openTrash();
+      case _ArticleListMenu.settings:
+        _openSettings();
     }
-    return IconButton(onPressed: onPressed, tooltip: label, icon: Icon(icon));
   }
 
   @override
@@ -689,6 +699,7 @@ class _ArticleListState extends State<_ArticleList> {
     builder: (context, constraints) {
       final width = constraints.maxWidth;
       final wide = width >= 840;
+      final short = constraints.maxHeight < 320;
       final outerInset = wide && width > 960 ? (width - 960) / 2 : 0.0;
       final theme = Theme.of(context);
       final colors = theme.colorScheme;
@@ -699,29 +710,44 @@ class _ArticleListState extends State<_ArticleList> {
           backgroundColor: colors.surface,
           surfaceTintColor: Colors.transparent,
           shape: Border(bottom: BorderSide(color: colors.outlineVariant)),
-          titleSpacing: outerInset + (wide ? 24 : 16),
-          actionsPadding: EdgeInsets.only(right: outerInset + (wide ? 16 : 4)),
+          leadingWidth: outerInset + 56,
+          leading: Align(
+            alignment: Alignment.centerRight,
+            child: PopupMenuButton<_ArticleListMenu>(
+              tooltip: 'メニュー',
+              icon: const Icon(Icons.menu),
+              onSelected: _selectMenu,
+              itemBuilder: (_) => const [
+                PopupMenuItem(
+                  value: _ArticleListMenu.templates,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.dashboard_customize_outlined),
+                    title: Text('テンプレート管理'),
+                  ),
+                ),
+                PopupMenuItem(
+                  value: _ArticleListMenu.trash,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.delete_outline),
+                    title: Text('ゴミ箱'),
+                  ),
+                ),
+                PopupMenuDivider(),
+                PopupMenuItem(
+                  value: _ArticleListMenu.settings,
+                  child: ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    leading: Icon(Icons.settings_outlined),
+                    title: Text('設定'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          titleSpacing: 8,
           title: const Text('記事設計'),
-          actions: [
-            _toolbarAction(
-              wide: wide,
-              label: 'テンプレート管理',
-              icon: Icons.dashboard_customize_outlined,
-              onPressed: _openTemplates,
-            ),
-            _toolbarAction(
-              wide: wide,
-              label: 'バックアップ',
-              icon: Icons.backup_outlined,
-              onPressed: _openBackup,
-            ),
-            _toolbarAction(
-              wide: wide,
-              label: 'ゴミ箱',
-              icon: Icons.delete_outline,
-              onPressed: _openTrash,
-            ),
-          ],
         ),
         floatingActionButton: wide
             ? null
@@ -739,7 +765,7 @@ class _ArticleListState extends State<_ArticleList> {
               child: Padding(
                 padding: EdgeInsets.fromLTRB(
                   wide ? 24 : 16,
-                  wide ? 28 : 12,
+                  wide && !short ? 28 : 12,
                   wide ? 24 : 16,
                   0,
                 ),
@@ -763,7 +789,7 @@ class _ArticleListState extends State<_ArticleList> {
                           ),
                         ],
                       ),
-                      const SizedBox(height: 20),
+                      SizedBox(height: short ? 8 : 20),
                     ],
                     TextField(
                       controller: _search,

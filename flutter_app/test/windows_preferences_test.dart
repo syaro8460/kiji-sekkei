@@ -1,0 +1,142 @@
+import 'package:drift/native.dart';
+import 'package:file/file.dart';
+import 'package:file/memory.dart';
+import 'package:flutter_app/screens/settings_page.dart';
+import 'package:flutter_app/storage/app_preferences.dart';
+import 'package:flutter_app/storage/appearance_preferences.dart';
+import 'package:flutter_app/storage/article_database.dart';
+import 'package:flutter_test/flutter_test.dart';
+import 'package:material_ui/material_ui.dart';
+import 'package:path_provider_windows/path_provider_windows.dart';
+import 'package:shared_preferences_windows/shared_preferences_windows.dart';
+
+class _PathProvider extends PathProviderWindows {
+  String? directory = '/preferences';
+
+  @override
+  Future<String?> getApplicationSupportPath() async => directory;
+}
+
+void main() {
+  const sortKey = AppPreferences.draftSortOrderKey;
+  const appearanceKey = 'appearanceMode';
+  late MemoryFileSystem fs;
+  late _PathProvider paths;
+  late bool denyWrites;
+  late AppPreferences preferences;
+
+  AppPreferences openStore() => AppPreferences(
+    store: SharedPreferencesWindows()
+      ..fs = fs
+      ..pathProvider = paths,
+  );
+
+  setUp(() {
+    denyWrites = false;
+    fs = MemoryFileSystem(
+      opHandle: (path, operation) {
+        if (denyWrites && operation == FileSystemOp.write) {
+          denyWrites = false;
+          throw FileSystemException('Write denied', path);
+        }
+      },
+    );
+    paths = _PathProvider();
+    fs.file('/preferences/shared_preferences.json')
+      ..createSync(recursive: true)
+      ..writeAsStringSync(
+        '{"flutter.draftSortOrder":"updatedOldest","appearanceMode":"light","flutter.other":true}',
+      );
+    preferences = openStore();
+  });
+
+  for (final appearanceFirst in [true, false]) {
+    test(
+      'both settings survive a fresh read (appearance first: $appearanceFirst)',
+      () async {
+        final appearance = AppearancePreferences(preferences: preferences);
+        expect(await preferences.load(sortKey), 'updatedOldest');
+        expect(await appearance.load(), AppearanceMode.light);
+        final writes = appearanceFirst
+            ? [
+                appearance.save(AppearanceMode.dark),
+                preferences.save(sortKey, 'titleAscending'),
+              ]
+            : [
+                preferences.save(sortKey, 'titleAscending'),
+                appearance.save(AppearanceMode.dark),
+              ];
+        final reading = preferences.load(appearanceKey);
+        await Future.wait(writes);
+        expect(await reading, 'dark');
+
+        final reopened = openStore();
+        expect(await reopened.load(sortKey), 'titleAscending');
+        expect(
+          await AppearancePreferences(preferences: reopened).load(),
+          AppearanceMode.dark,
+        );
+        expect(
+          fs.file('/preferences/shared_preferences.json').readAsStringSync(),
+          contains('"flutter.other":true'),
+        );
+      },
+    );
+  }
+
+  for (final unavailablePath in [true, false]) {
+    testWidgets(
+      'preserves preferences after a failed Windows write (missing path: $unavailablePath)',
+      (tester) async {
+        final database = ArticleDatabase(NativeDatabase.memory());
+        addTearDown(database.close);
+        Future<void> open() async {
+          await tester.pumpWidget(
+            MaterialApp(
+              home: SettingsPage(
+                database: database,
+                appearancePreferences: AppearancePreferences(
+                  preferences: preferences,
+                ),
+              ),
+            ),
+          );
+          await tester.pumpAndSettle();
+        }
+
+        await open();
+        expect(find.text('ライト'), findsOneWidget);
+        expect(await preferences.load(sortKey), 'updatedOldest');
+        if (unavailablePath) {
+          paths.directory = null;
+        } else {
+          denyWrites = true;
+        }
+
+        await tester.tap(find.text('外観'));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('ダーク'));
+        await tester.pumpAndSettle();
+        expect(find.text('外観の設定を保存できませんでした。'), findsOneWidget);
+        expect(find.text('ライト'), findsOneWidget);
+        if (!unavailablePath) denyWrites = true;
+        await expectLater(
+          preferences.save(sortKey, 'titleDescending'),
+          throwsStateError,
+        );
+        expect(await preferences.load(sortKey), 'updatedOldest');
+
+        await tester.pumpWidget(const SizedBox());
+        await open();
+        expect(find.text('ライト'), findsOneWidget);
+        paths.directory = '/preferences';
+        denyWrites = false;
+        final reopened = openStore();
+        expect(await reopened.load(sortKey), 'updatedOldest');
+        expect(await reopened.load(appearanceKey), 'light');
+        await preferences.save(sortKey, 'titleAscending');
+        expect(await openStore().load(appearanceKey), 'light');
+      },
+    );
+  }
+}

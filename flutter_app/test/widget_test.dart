@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:drift/native.dart';
 import 'package:flutter/rendering.dart' show RenderParagraph;
+import 'package:flutter/services.dart';
 import 'package:flutter_app/main.dart';
 import 'package:flutter_app/models/article_draft.dart';
 import 'package:flutter_app/models/article_template.dart';
@@ -317,7 +318,8 @@ void main() {
       expect(find.text('プレビュー'), findsNothing);
       await tap(find.text('ゴミ箱に移動'));
       expect(find.text('まだ記事がありません'), findsOneWidget);
-      await tap(find.byTooltip('ゴミ箱'));
+      await tap(find.byTooltip('メニュー'));
+      await tap(find.text('ゴミ箱'));
       expect(find.text('保存した記事'), findsOneWidget);
       expect(find.text('期限切れの記事'), findsNothing);
     }
@@ -376,7 +378,8 @@ void main() {
       await tap(find.text('保存'));
     }
 
-    await tap(find.byTooltip('テンプレート管理'));
+    await tap(find.byTooltip('メニュー'));
+    await tap(find.text('テンプレート管理'));
     expect(find.text('カスタムテンプレートはまだありません'), findsOneWidget);
     await tap(find.text('新しいテンプレート'));
     await fill('インタビュー', '目的\n相手');
@@ -401,7 +404,8 @@ void main() {
     await tap(find.text('作成'));
     await tap(find.byTooltip('戻る'));
 
-    await tap(find.byTooltip('テンプレート管理'));
+    await tap(find.byTooltip('メニュー'));
+    await tap(find.text('テンプレート管理'));
     await tap(find.byTooltip('週次レビューの操作'));
     await tap(find.text('削除'));
     await tap(find.text('キャンセル'));
@@ -833,7 +837,8 @@ void main() {
       expect(copy.tags, original.tags);
       expect(copy.articleType, original.articleType);
 
-      await tap(find.byTooltip('テンプレート管理'));
+      await tap(find.byTooltip('メニュー'));
+      await tap(find.text('テンプレート管理'));
       await tap(find.byTooltip('取材の操作'));
       await tap(find.text('複製'));
       expect(find.text('取材'), findsOneWidget);
@@ -871,13 +876,69 @@ void main() {
       ),
       findsOneWidget,
     );
-    expect(find.text('テンプレート管理'), findsOneWidget);
 
+    Future<void> checkMenu() async {
+      final menu = find.byTooltip('メニュー');
+      expect(
+        tester.getCenter(menu).dx,
+        lessThan(tester.getCenter(find.text('記事設計')).dx),
+      );
+      await tester.tap(menu);
+      await tester.pumpAndSettle();
+      expect(find.text('テンプレート管理'), findsOneWidget);
+      expect(find.text('ゴミ箱'), findsOneWidget);
+      expect(find.byType(PopupMenuDivider), findsOneWidget);
+      expect(find.text('バックアップ'), findsNothing);
+      await tester.tap(find.text('設定'));
+      await tester.pumpAndSettle();
+      expect(find.text('外観'), findsOneWidget);
+      expect(find.byTooltip('並べ替え'), findsNothing);
+      await tester.tap(find.byTooltip('戻る'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('並べ替え'), findsOneWidget);
+    }
+
+    await checkMenu();
     await tester.binding.setSurfaceSize(const Size(390, 844));
     await tester.pumpAndSettle();
     expect(tester.getSize(search).width, lessThan(390));
     expect(find.byType(FloatingActionButton), findsOneWidget);
-    expect(find.byTooltip('テンプレート管理'), findsOneWidget);
+    await checkMenu();
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('opens the short landscape menu and restores keyboard focus', (
+    tester,
+  ) async {
+    final database = ArticleDatabase(NativeDatabase.memory());
+    addTearDown(database.close);
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.binding.setSurfaceSize(const Size(900, 240));
+    await tester.runAsync(() => database.listDrafts(DraftStatus.active));
+    await tester.pumpWidget(MyApp(database: database));
+    await tester.pump(const Duration(milliseconds: 500));
+    await tester.pumpAndSettle();
+
+    Future<void> key(LogicalKeyboardKey key) async {
+      await tester.sendKeyEvent(key);
+      await tester.pumpAndSettle();
+    }
+
+    await key(LogicalKeyboardKey.tab);
+    await key(LogicalKeyboardKey.enter);
+    for (final label in ['テンプレート管理', 'ゴミ箱', '設定']) {
+      expect(find.text(label).hitTestable(), findsOneWidget);
+    }
+    await key(LogicalKeyboardKey.escape);
+    expect(find.text('設定'), findsNothing);
+    // Enter alone reopens the menu if focus returned to the trigger.
+    await key(LogicalKeyboardKey.enter);
+    expect(find.text('設定'), findsOneWidget);
+    await key(LogicalKeyboardKey.arrowDown);
+    await key(LogicalKeyboardKey.arrowDown);
+    await key(LogicalKeyboardKey.arrowDown);
+    await key(LogicalKeyboardKey.enter);
+    expect(find.text('外観'), findsOneWidget);
     expect(tester.takeException(), isNull);
   });
 
